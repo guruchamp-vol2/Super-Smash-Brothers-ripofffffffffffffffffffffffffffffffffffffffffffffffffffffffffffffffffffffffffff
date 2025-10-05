@@ -4,7 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smashlike Ultimate — Open Prototype</title>
-  <link rel="stylesheet" href="style.css?v=20251005-1">
+  <link rel="stylesheet" href="style.css?v=20251005-3">
+  <style>
+    /* Hard overrides to ensure Character Select fits without zoom */
+    #chars .w1100{ max-width:100% !important; width:100% !important }
+    #chars .grid.two-col{ grid-template-columns:1fr !important }
+    #chars .grid.auto{ grid-template-columns:repeat(auto-fit,minmax(120px,1fr)) !important; gap:8px !important }
+
+    /* Always align screens to top and prevent horizontal overflow */
+    .screen{ max-width:100vw; padding:12px }
+    .screen.center{ align-items:flex-start !important; justify-content:center }
+    html,body{ overflow-x:hidden }
+
+    /* Force game layout to stack and scale */
+    #gameScreen .row.gap{ flex-direction:column !important; align-items:center }
+    #game{ width:100% !important; height:auto !important; max-width:1100px }
+  </style>
 </head>
 <body>
   <!-- TITLE -->
@@ -105,13 +120,17 @@
         <h2>Select Fighters</h2>
         <div class="pill" id="modeLabel">—</div>
       </div>
+      <div class="row gap" id="charToggles" style="margin-bottom:8px">
+        <button id="viewP1" class="ghost">P1</button>
+        <button id="viewP2" class="ghost">P2</button>
+      </div>
       <div class="grid two-col gap">
-        <div>
+        <div id="p1Col">
           <div class="muted">Player 1</div>
           <div id="p1Chars" class="grid auto"></div>
           <div id="p1Alts" class="row wrap gap mt"></div>
         </div>
-        <div>
+        <div id="p2Col">
           <div class="muted">Player 2</div>
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
             <label style="font-size:0.9rem"><input type="checkbox" id="p2Cpu" checked> CPU</label>

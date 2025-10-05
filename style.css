@@ -17,6 +17,7 @@
 
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:16px/1.25 Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial; overflow-x:hidden}
+html{font-size:clamp(12px,0.9vw,16px)}
 
 /* Cinematic gradient background with subtle light flares */
 body::before{
@@ -49,9 +50,9 @@ h1.logo span{color:var(--accent)}
 .row.space{justify-content:space-between}
 .grid{display:grid;gap:16px}
 .grid.two-col{grid-template-columns:1fr 1fr}
-@media (max-width:1600px){ .grid.two-col{ grid-template-columns:1fr } }
+@media (max-width:1800px){ .grid.two-col{ grid-template-columns:1fr } }
 .grid.main-grid{grid-template-columns:1.2fr .8fr;max-width:1100px;width:95vw}
-.grid.auto{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.grid.auto{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 .center{display:flex;align-items:center;justify-content:center}
 /* On short heights, align content to top so users don't need to zoom */
 @media (max-height:820px){ .screen.center{ align-items:flex-start; padding-top:16px } }
@@ -67,7 +68,7 @@ h1.logo span{color:var(--accent)}
 .small{font-size:12px}
 .muted{color:var(--muted)}
 .side{min-width:260px}
-.screen{position:fixed;inset:0;padding:12px}
+.screen{position:relative;min-height:100vh;width:100%;padding:12px}
 
 /* Cards & panels with hard light edge + inner border */
 .card{
@@ -152,11 +153,11 @@ button.xl{ font-size:22px; padding:16px 22px }
   cursor:pointer; box-shadow:0 12px 28px rgba(2,4,10,.6), inset 0 1px 0 #ffffff10; font-weight:800; position:relative; overflow:hidden;
 }
 @media (max-width:1600px){
-  .grid.auto{ grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px }
+  .grid.auto{ grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px }
 }
 @media (max-width:1280px){
   .item{ padding:12px }
-  .grid.auto{ grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px }
+  .grid.auto{ grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px }
 }
 .item::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:linear-gradient(180deg,var(--accent), transparent); opacity:.8}
 .item::after{content:""; position:absolute; inset:-20% -10% 70% -10%; transform:skew(-18deg) rotate(-10deg); background:linear-gradient(90deg, rgba(255,255,255,.18), rgba(255,255,255,.05), transparent)}
@@ -167,7 +168,7 @@ button.xl{ font-size:22px; padding:16px 22px }
 .char-alt[aria-selected="true"]{outline:3px solid rgba(255,99,132,0.85)}
 
 /* Game canvas */
-#game{background:#0b0b10;border:1px solid var(--line);border-radius:18px;image-rendering: pixelated;image-rendering: crisp-edges;box-shadow:0 14px 44px rgba(0,0,0,.75)}
+#game{background:#0b0b10;border:1px solid var(--line);border-radius:18px;image-rendering: pixelated;image-rendering: crisp-edges;box-shadow:0 14px 44px rgba(0,0,0,.75);width:100%;height:auto;max-width:1100px}
 
 /* HUD */
 .hud{position:absolute;inset:0;pointer-events:none}
@@ -203,6 +204,13 @@ button.xl{ font-size:22px; padding:16px 22px }
   #game{ width:min(100%,1100px); height:auto }
   #gameScreen .row.gap{ flex-direction:column; align-items:center; gap:12px }
   .side{ min-width:0; width:100% }
+}
+@media (max-width:1800px){
+  .w1100{ width:min(94vw, 1100px) }
+  .w900{ width:min(94vw, 900px) }
+}
+@media (max-width:1600px){
+  #chars .w1100{ width:min(98vw, 980px) }
 }
 @media (max-width:1280px){
   .w1100{ width:min(96vw, 980px) }
