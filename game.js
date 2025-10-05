@@ -66,6 +66,9 @@ const canvas = document.getElementById('game');
 const ctx = canvas ? canvas.getContext('2d') : null;
 if (ctx) ctx.imageSmoothingEnabled = false;
 
+// Global switch: use portrait-derived fallback sheets when no real sheet exists
+const USE_PORTRAIT_FALLBACK = false;
+
 // Portrait mapping loaded from assets/portraits.json
 let PORTRAITS = {};
 async function ensurePortraitsLoaded(){
@@ -133,11 +136,11 @@ function updateDebug(){ try{ if(!debugOverlay) return; debugOverlay.textContent 
 // ===== runtime sprite gen =====
 const MANIFEST={}; const SPRITES={};
 const ANIMS=[
-  ['idle',8,12], ['walk',10,12], ['run',8,16],
-  ['jump',8,14], ['aerial',8,12],
-  ['attack',10,16], ['special',10,16],
-  ['hitstun',6,16], ['ko',8,12],
-  ['fs',12,18]
+  ['idle',16,12], ['walk',16,14], ['run',16,20],
+  ['jump',12,16], ['aerial',12,14],
+  ['attack',14,20], ['special',14,20],
+  ['hitstun',10,18], ['ko',12,14],
+  ['fs',16,22]
 ];
 const FW=16,FH=16;
 
@@ -248,7 +251,7 @@ async function buildSpritesForSelection(){
     }
     // Try building from a portrait if available
     const portraitSrc = PORTRAITS[char.id];
-    if (portraitSrc){
+    if (USE_PORTRAIT_FALLBACK && portraitSrc){
       try{
         const pimg = await loadImage(portraitSrc);
         const {sheet,meta} = makeSheetFromPortrait(pimg);
@@ -682,9 +685,9 @@ const controlsP2={left:false,right:false,attack:false,special:false,jump:false,f
 function resetControls(c){ Object.keys(c).forEach(k=> c[k]=false); }
 function updateControls(){
   controlsP1.left=!!keys['a']; controlsP1.right=!!keys['d']; controlsP1.fastfall=!!keys['s']; if(keys['w']||keys[' ']){ controlsP1.jump=true; }
-  if(keys['j']) controlsP1.attack=true; if(keys['k']) controlsP1.special=true; if(keys['l']) controlsP1.shield=true; if(keys['h']) controlsP1.pick=true; if(keys['u']) controlsP1.use=true; controlsP1.fs=!!keys['o'];
+  if(keys['j']||keys['z']) controlsP1.attack=true; if(keys['k']||keys['x']) controlsP1.special=true; if(keys['l']) controlsP1.shield=true; if(keys['h']) controlsP1.pick=true; if(keys['u']) controlsP1.use=true; controlsP1.fs=!!keys['o'];
   controlsP2.left=!!keys['ArrowLeft']; controlsP2.right=!!keys['ArrowRight']; controlsP2.fastfall=!!keys['ArrowDown']; if(keys['ArrowUp']||keys['0']){ controlsP2.jump=true; }
-  if(keys['1']) controlsP2.attack=true; if(keys['2']) controlsP2.special=true; if(keys['3']) controlsP2.shield=true; if(keys['.']) controlsP2.pick=true; controlsP2.fs=!!keys['9'];
+  if(keys['1']||keys[',']) controlsP2.attack=true; if(keys['2']||keys['/']) controlsP2.special=true; if(keys['3']) controlsP2.shield=true; if(keys['.']) controlsP2.pick=true; controlsP2.fs=!!keys['9'];
 }
 
 // ==== Game loop ====
@@ -962,14 +965,31 @@ function dashHit(owner, w,h,dmg,kb, duration){ addHitbox(owner, owner.dir>0?0:-w
 
 function cpuThink(bot, foe){
   const lvl = Math.max(1, Math.min(9, bot.aiLevel || App.rules.cpuLevel || 1));
+  const ln = lvl/9; // 0.11..1
+  const now = performance.now()/1000;
+  bot._aiCD = bot._aiCD || 0; // next allowed decision time
+  if (now < bot._aiCD) return; // rate limit decisions
+  const baseDelay = 0.28 + (1-ln)*0.35; // slower reactions at lower levels
+  bot._aiCD = now + baseDelay;
+
   const c = { left:false,right:false,jump:false,fastfall:false,attack:false,special:false,shield:false,pick:false,use:false,fs:false };
-  if(Math.abs(bot.x-foe.x)>20){ c.left = bot.x>foe.x; c.right = bot.x<foe.x; }
-  if(foe.y+foe.h < bot.y && Math.random()<0.02*lvl) c.jump=true;
-  if(Math.random()<0.03*lvl){ c.attack=true; }
-  if(Math.random()<0.015*lvl){ c.special=true; }
-  if(bot.fs>=100 && Math.random()<0.01*lvl){ c.fs=true; }
-  if(bot.holding==null && items.some(i=>Math.abs(i.x-bot.x)<30 && Math.abs(i.y-bot.y)<30)){ c.pick=true; }
-  if(bot.holding!=null && Math.random()<0.02*lvl){ c.use=true; }
+
+  // Approach/space
+  if(Math.abs(bot.x-foe.x)>30){ c.left = bot.x>foe.x; c.right = bot.x<foe.x; }
+  // Vertical decision
+  if((foe.y+foe.h) < bot.y && Math.random() < 0.015*ln) c.jump=true;
+
+  // Offensive decisions tuned down heavily
+  if(Math.random() < 0.012*ln){ c.attack=true; }
+  if(Math.random() < 0.006*ln){ c.special=true; }
+
+  // FS sparingly
+  if(bot.fs>=100 && Math.random() < 0.004*ln){ c.fs=true; }
+
+  // Items
+  if(bot.holding==null && items.some(i=>Math.abs(i.x-bot.x)<26 && Math.abs(i.y-bot.y)<26) && Math.random() < 0.02*ln){ c.pick=true; }
+  if(bot.holding!=null && Math.random() < 0.012*ln){ c.use=true; }
+
   Object.assign(bot===p2?controlsP2:controlsP1, c);
 }
 
