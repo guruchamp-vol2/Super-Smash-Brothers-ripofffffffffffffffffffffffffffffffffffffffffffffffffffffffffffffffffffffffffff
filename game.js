@@ -66,7 +66,6 @@ const canvas = document.getElementById('game');
 const ctx = canvas ? canvas.getContext('2d') : null;
 if (ctx) ctx.imageSmoothingEnabled = false;
 
-
 const MANIFEST={}; const SPRITES={};
 const ANIMS=[
   ['idle',8,12], ['walk',10,12], ['run',8,16],
@@ -207,13 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('keydown', any);
   window.addEventListener('mousedown', any);
   window.addEventListener('touchstart', any, { passive: true });
-
-  // NEW: Ensure overlays are hidden on first load
-  document.getElementById('pause')?.classList.add('hidden');
-  document.getElementById('results')?.classList.add('hidden');
 });
-
-
 
 var el;
 
@@ -522,15 +515,18 @@ class Helper{
   render(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,this.w,this.h); } }
 function spawnRandomItem(){ const roll=Math.random(); if(roll<.34) items.push(new Heart()); else if(roll<.68) items.push(new Bomb()); else items.push(new AssistTrophy()); }
 
+// Controls
 const keys={};
+function clearKeys(){ for(const k of Object.keys(keys)) delete keys[k]; }
 window.addEventListener('keydown',e=>{ keys[e.key]=true; });
 window.addEventListener('keyup',e=>{ keys[e.key]=false; });
 const controlsP1={left:false,right:false,attack:false,special:false,jump:false,fastfall:false,shield:false,pick:false,use:false,fs:false};
 const controlsP2={left:false,right:false,attack:false,special:false,jump:false,fastfall:false,shield:false,pick:false,use:false,fs:false};
+function resetControls(c){ Object.keys(c).forEach(k=> c[k]=false); }
 function updateControls(){
-  controlsP1.left=keys['a']; controlsP1.right=keys['d']; controlsP1.fastfall=keys['s']; if(keys['w']||keys[' ']){ controlsP1.jump=true; }
+  controlsP1.left=!!keys['a']; controlsP1.right=!!keys['d']; controlsP1.fastfall=!!keys['s']; if(keys['w']||keys[' ']){ controlsP1.jump=true; }
   if(keys['j']) controlsP1.attack=true; if(keys['k']) controlsP1.special=true; if(keys['l']) controlsP1.shield=true; if(keys['h']) controlsP1.pick=true; if(keys['u']) controlsP1.use=true; controlsP1.fs=!!keys['o'];
-  controlsP2.left=keys['ArrowLeft']; controlsP2.right=keys['ArrowRight']; controlsP2.fastfall=keys['ArrowDown']; if(keys['ArrowUp']||keys['0']){ controlsP2.jump=true; }
+  controlsP2.left=!!keys['ArrowLeft']; controlsP2.right=!!keys['ArrowRight']; controlsP2.fastfall=!!keys['ArrowDown']; if(keys['ArrowUp']||keys['0']){ controlsP2.jump=true; }
   if(keys['1']) controlsP2.attack=true; if(keys['2']) controlsP2.special=true; if(keys['3']) controlsP2.shield=true; if(keys['.']) controlsP2.pick=true; controlsP2.fs=!!keys['9'];
 }
 
@@ -538,19 +534,24 @@ let p1,p2; let last=0; let running=false; let paused=false; let itemTimer=0; let
 function opponentOf(f){ return f===p1? p2 : p1; }
 
 function startBattle(){
+  // Hide/clear overlays first to avoid “Game!” showing at start
+  $('#results')?.classList.add('hidden');
+  $('#pause')?.classList.add('hidden');
+
   Screens.show('#gameScreen'); ensureAudio(); startMusic();
-
-  // NEW: force-hide overlays and reset state/inputs
-  paused = false;
-  document.getElementById('pause')?.classList.add('hidden');
-  document.getElementById('results')?.classList.add('hidden');
-  Object.keys(keys).forEach(k => { keys[k] = false; });
-
   if(!App.stage) App.stage = STAGES[0];
+
+  // fresh sprites based on current alts
   const {p1Id,p2Id}=buildSpritesForSelection();
+
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
-  running=true; items.length=0; projectiles.length=0; helpers.length=0; sparks.length=0; itemTimer=0; last=0;
+
+  // reset state that could leak between matches
+  running=true; paused=false; items.length=0; projectiles.length=0; helpers.length=0; itemTimer=0; last=0;
+  p1.vx=p1.vy=p2.vx=p2.vy=0;
+  clearKeys(); resetControls(controlsP1); resetControls(controlsP2);
+
   timer = App.rules.time>0? App.rules.time*60 : 0;
   updateHUD(); requestAnimationFrame(loop);
 }
@@ -568,14 +569,7 @@ function updateHUD(){
 function renderStocks(f){ if(App.mode==='training') return '<div class="stock"></div>'; let s=''; for(let i=0;i<(f?f.stocks:0);i++) s+='<div class="stock"></div>'; return s; }
 function formatTime(sec){ const m=Math.floor(sec/60); const s=Math.floor(sec%60).toString().padStart(2,'0'); return `${m}:${s}`; }
 
-function loop(ts){
-  // NEW: if overlays are visible, keep game paused
-  const pauseOpen   = !document.getElementById('pause')?.classList.contains('hidden');
-  const resultsOpen = !document.getElementById('results')?.classList.contains('hidden');
-  if (pauseOpen || resultsOpen) { paused = true; }
-
-  if(!running) return; if(!last) last=ts; const dt=Math.min(.033,(ts-last)/1000); last=ts; if(!paused){ frame(dt); } requestAnimationFrame(loop);
-}
+function loop(ts){ if(!running) return; if(!last) last=ts; const dt=Math.min(.033,(ts-last)/1000); last=ts; if(!paused){ frame(dt); } requestAnimationFrame(loop); }
 
 function frame(dt){
   updateControls();
@@ -613,11 +607,12 @@ function drawSparks(){
 function collide(a,b){ return (a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y); }
 function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.splice(i,1); }
 
+// Pause / overlays
 window.addEventListener('keydown', function(e){
-  var gs = document.getElementById('gameScreen');
-  if (gs && gs.classList.contains('hidden')) return;
+  const gs = document.getElementById('gameScreen');
+  if (!gs || gs.classList.contains('hidden')) return; // ignore when not in-game
 
-  var pauseEl = document.getElementById('pause');
+  const pauseEl = document.getElementById('pause');
 
   if (e.key === 'Enter'){
     paused = !paused;
@@ -634,31 +629,30 @@ window.addEventListener('keydown', function(e){
   }
 });
 
-var _resume = document.getElementById('resume');
+const _resume = document.getElementById('resume');
 if (_resume) _resume.addEventListener('click', function(){
   paused = false;
-  var p = document.getElementById('pause');
+  const p = document.getElementById('pause');
   if (p) p.classList.add('hidden');
 });
 
-var _end = document.getElementById('endBattle');
+const _end = document.getElementById('endBattle');
 if (_end) _end.addEventListener('click', function(){
   paused = false;
-  var p = document.getElementById('pause');
+  const p = document.getElementById('pause');
   if (p) p.classList.add('hidden');
   endBattle();
 });
 
-var _spawn = document.getElementById('spawnItem');
+const _spawn = document.getElementById('spawnItem');
 if (_spawn) _spawn.addEventListener('click', function(){ spawnMenu(); });
-
 
 function spawnMenu(){
   const old = $('#pause .panel .spawnGrid'); if(old) old.remove();
   const grid = document.createElement('div'); grid.className='grid auto gap spawnGrid'; grid.style.marginTop='10px';
   const opts=[{n:'Heart',c:()=>items.push(new Heart())},{n:'Bomb',c:()=>items.push(new Bomb())},{n:'Assist Trophy',c:()=>items.push(new AssistTrophy())}];
   opts.forEach(o=>{const it=document.createElement('div'); it.className='item'; it.textContent=o.n; it.onclick=()=>{o.c(); grid.remove();}; grid.appendChild(it);});
-  var pnl = document.querySelector('#pause .panel');
+  const pnl = document.querySelector('#pause .panel');
   if (pnl) pnl.appendChild(grid);
 }
 
@@ -670,33 +664,32 @@ function concludeTimed(){
 }
 
 function showResults(title){
-  var rt = document.getElementById('resultTitle');
+  const rt = document.getElementById('resultTitle');
   if (rt) rt.textContent = title || (p1.dead ? 'Player 2 Wins!' : 'Player 1 Wins!');
 
-  var statsEl = document.getElementById('resultStats');
+  const statsEl = document.getElementById('resultStats');
   if (statsEl){
     statsEl.innerHTML='';
     statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P1 — ${p1.name}</h3><div>Damage Dealt: ${p1.stats.dealt.toFixed(1)}</div><div>Falls: ${p1.stats.falls}</div></div>`);
     statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P2 — ${p2.name}</h3><div>Damage Dealt: ${p2.stats.dealt.toFixed(1)}</div><div>Falls: ${p2.stats.falls}</div></div>`);
   }
 
-  var res = document.getElementById('results');
+  const res = document.getElementById('results');
   if (res) res.classList.remove('hidden');
 }
 
-var againBtn = document.getElementById('again');
+const againBtn = document.getElementById('again');
 if (againBtn) againBtn.addEventListener('click', function(){
-  var res = document.getElementById('results');
+  const res = document.getElementById('results');
   if (res) res.classList.add('hidden');
   startBattle();
 });
-var toSelectBtn = document.getElementById('toSelect');
+const toSelectBtn = document.getElementById('toSelect');
 if (toSelectBtn) toSelectBtn.addEventListener('click', function(){
-  var res = document.getElementById('results');
+  const res = document.getElementById('results');
   if (res) res.classList.add('hidden');
   Screens.show('#chars');
 });
-
 
 let shakeAmt=0, shakeEnd=0;
 function shake(mag, ms){ shakeAmt=mag; shakeEnd=performance.now()+ms; const tick=()=>{ if(performance.now()<shakeEnd){ const dx=(Math.random()*shakeAmt-shakeAmt/2),dy=(Math.random()*shakeAmt-shakeAmt/2); ctx.setTransform(1,0,0,1,dx,dy); requestAnimationFrame(tick); } else ctx.setTransform(1,0,0,1,0,0); }; tick(); }
