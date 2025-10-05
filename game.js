@@ -68,6 +68,8 @@ if (ctx) ctx.imageSmoothingEnabled = false;
 
 // Global switch: use portrait-derived fallback sheets when no real sheet exists
 const USE_PORTRAIT_FALLBACK = false;
+// Force procedural tiny character sprites (ignore portrait + external sheets)
+const FORCE_PROCEDURAL = true;
 
 // Portrait mapping loaded from assets/portraits.json
 let PORTRAITS = {};
@@ -241,7 +243,7 @@ async function buildSpritesForSelection(){
     const id = char.id + '_' + side;
     // Prefer external sheet if configured
     const ext = SPRITE_INDEX[char.id];
-    if (ext && ext.sheet && ext.anims && ext.frameSize){
+    if (!FORCE_PROCEDURAL && ext && ext.sheet && ext.anims && ext.frameSize){
       try{
         const img = await loadImage(ext.sheet);
         SPRITES[id] = img;
@@ -251,7 +253,7 @@ async function buildSpritesForSelection(){
     }
     // Try building from a portrait if available
     const portraitSrc = PORTRAITS[char.id];
-    if (USE_PORTRAIT_FALLBACK && portraitSrc){
+    if (!FORCE_PROCEDURAL && USE_PORTRAIT_FALLBACK && portraitSrc){
       try{
         const pimg = await loadImage(portraitSrc);
         const {sheet,meta} = makeSheetFromPortrait(pimg);
@@ -489,7 +491,7 @@ const FS_CHARGE_HIT=0.8, FS_CHARGE_TAKEN=0.4;
 class Entity{ constructor(x,y,w,h){ Object.assign(this,{x,y,w,h,vx:0,vy:0,dir:1,dead:false}); } }
 class Fighter extends Entity{
   constructor(side,spec,alt,spriteKey){
-    super(200+side*600, 400, 56, 64);
+    super(200+side*600, 400, 40, 48);
     this.side=side; this.spec=spec; this.alt=alt; this.name=spec.name;
     this.spriteKey=spriteKey; this.meta=MANIFEST[spriteKey]; this.sheet=SPRITES[spriteKey];
     this.onGround=false; this.damage=0; this.stocks= App.mode==='training'? Infinity: App.rules.stocks;
