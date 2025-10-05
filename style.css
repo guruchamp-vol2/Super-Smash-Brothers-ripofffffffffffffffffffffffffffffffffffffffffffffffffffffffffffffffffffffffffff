@@ -184,3 +184,22 @@ button.xl{ font-size:22px; padding:16px 22px }
   .grid.auto{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
   h1.logo{font-size:48px}
 }
+
+/* Ensure full screens do not clip on smaller viewports */
+.screen{ overflow:auto }
+
+/* Make the game layout responsive so you don't need to zoom out */
+@media (max-width:1400px){
+  #game{ width:min(100%,1100px); height:auto }
+  #gameScreen .row.gap{ flex-direction:column; align-items:center }
+  .side{ min-width:0; width:100% }
+}
+@media (max-width:1200px){
+  h1.logo{ font-size:56px }
+  .menu{ height:104px; font-size:34px }
+}
+@media (max-width:1000px){
+  h1.logo{ font-size:48px }
+  .menu{ height:92px; font-size:28px }
+  #game{ width:100%; height:auto }
+}
