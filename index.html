@@ -82,7 +82,7 @@
         <div class="panel">
           <h3>CPU</h3>
           <label>CPU Level (0: Human)
-            <input id="ruleCpuLevel" type="number" min="0" max="9" value="3">
+            <input id="ruleCpuLevel" type="number" min="0" max="9" value="1">
           </label>
         </div>
         <div class="panel">
@@ -115,6 +115,9 @@
           <div class="muted">Player 2</div>
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
             <label style="font-size:0.9rem"><input type="checkbox" id="p2Cpu" checked> CPU</label>
+            <label style="font-size:0.9rem">Level
+              <input type="number" id="p2CpuLevel" min="1" max="9" value="1" style="width:60px">
+            </label>
           </div>
           <div id="p2Chars" class="grid auto"></div>
           <div id="p2Alts" class="row wrap gap mt"></div>
@@ -188,6 +191,11 @@
             <button id="spawnItem" class="ghost">Spawn Item (Training)</button>
             <button id="endBattle" class="ghost">End Battle</button>
           </div>
+        </div>
+      </div>
+      <div id="countdown" class="pause hidden">
+        <div class="panel">
+          <h1 id="countdownText">3</h1>
         </div>
       </div>
       <div id="results" class="pause hidden">

@@ -4,7 +4,7 @@ const Screens={ show(id){ $$('.screen').forEach(s=>s.classList.add('hidden')); $
 
 const App = {
   mode: 'stock',
-  rules: { stocks: 3, time: 0, ratio: 1.0, itemsOn: true, itemFreq: 8, cpuLevel: 3, shake: true, sparks: true },
+  rules: { stocks: 3, time: 0, ratio: 1.0, itemsOn: true, itemFreq: 8, cpuLevel: 1, shake: true, sparks: true },
   p1: { char:null, alt:0 },
   p2: { char:null, alt:0 },
   stage: null,
@@ -519,6 +519,8 @@ function updateControls(){
 // ==== Game loop ====
 let p1,p2; let last=0; let running=false; let paused=false; let itemTimer=0; let timer=0;
 let startGrace = 0; // KO & results lockout at match start
+let preStart = false; // freeze gameplay during countdown
+let countdownT = 0;  // seconds remaining in countdown
 function opponentOf(f){ return f===p1? p2 : p1; }
 
 function startBattle(){
@@ -534,11 +536,15 @@ function startBattle(){
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
 
-  // Respect P2 CPU checkbox — if unchecked, make p2 human (aiLevel 0)
+  // Respect P2 CPU checkbox + level selector — if unchecked, make p2 human (aiLevel 0)
   try{
     const p2CpuEl = document.getElementById('p2Cpu');
+    const lvlEl = document.getElementById('p2CpuLevel');
+    const uiLvl = lvlEl ? Math.max(1, Math.min(9, parseInt(lvlEl.value||'1',10))) : (App.rules.cpuLevel||1);
     if (p2CpuEl && !p2CpuEl.checked){ p2.aiLevel = 0; }
-    else { p2.aiLevel = App.rules.cpuLevel; }
+    else { p2.aiLevel = uiLvl; }
+    // keep global rules in sync for any code referencing it
+    App.rules.cpuLevel = p2.aiLevel;
   } catch(e){ /* ignore in environments without DOM */ }
 
   // Debug: log created fighter objects and the start grace period
@@ -546,6 +552,11 @@ function startBattle(){
 
   // force spawn to canvas-based positions
   p1.placeSpawn(); p2.placeSpawn();
+
+  // Begin 3-2-1 countdown overlay and freeze gameplay
+  preStart = true; countdownT = 3.1;
+  document.getElementById('countdown')?.classList.remove('hidden');
+  const ctxt0 = document.getElementById('countdownText'); if (ctxt0) ctxt0.textContent = '3';
 
   running=true; paused=false; items.length=0; projectiles.length=0; helpers.length=0; itemTimer=0; last=0;
   p1.vx=p1.vy=p2.vx=p2.vy=0;
@@ -580,6 +591,36 @@ function frame(dt){
     return;
   }
   if(startGrace>0) startGrace -= dt;
+
+  // Starting countdown freeze
+  if (preStart){
+    countdownT -= dt;
+    const cEl = document.getElementById('countdown');
+    const tEl = document.getElementById('countdownText');
+    if (cEl) cEl.classList.remove('hidden');
+    if (tEl){
+      if (countdownT > 2) tEl.textContent = '3';
+      else if (countdownT > 1) tEl.textContent = '2';
+      else if (countdownT > 0) tEl.textContent = '1';
+      else tEl.textContent = 'GO!';
+    }
+
+    // draw scene without updates
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle=App.stage.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
+    for(const p of App.stage.platforms){ ctx.fillStyle=p.ground?'#2c2f4a':'#39405e'; ctx.fillRect(p.x,p.y,p.w,p.h); }
+    p1.render(); p2.render();
+    drawSparks();
+    updateHUD();
+
+    if (countdownT <= -0.25){
+      preStart = false;
+      document.getElementById('countdown')?.classList.add('hidden');
+      startGrace = Math.max(startGrace, 0.75);
+    }
+    updateDebug();
+    return;
+  }
 
   updateControls();
   p1.update(dt,controlsP1); 
@@ -623,6 +664,7 @@ function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.s
 window.addEventListener('keydown', function(e){
   const gs = document.getElementById('gameScreen');
   if (!gs || gs.classList.contains('hidden')) return;
+  if (preStart) return; // ignore inputs while countdown is running
 
   const pauseEl = document.getElementById('pause');
 
@@ -685,7 +727,7 @@ function shake(mag, ms){ shakeAmt=mag; shakeEnd=performance.now()+ms; const tick
 function sign(v){ return v<0?-1:1; }
 
 function cpuThink(bot, foe){
-  const lvl = App.rules.cpuLevel;
+  const lvl = Math.max(1, Math.min(9, bot.aiLevel || App.rules.cpuLevel || 1));
   const c = { left:false,right:false,jump:false,fastfall:false,attack:false,special:false,shield:false,pick:false,use:false,fs:false };
   if(Math.abs(bot.x-foe.x)>20){ c.left = bot.x>foe.x; c.right = bot.x<foe.x; }
   if(foe.y+foe.h < bot.y && Math.random()<0.02*lvl) c.jump=true;
