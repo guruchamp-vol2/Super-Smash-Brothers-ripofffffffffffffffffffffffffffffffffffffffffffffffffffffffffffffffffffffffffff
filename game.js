@@ -515,10 +515,14 @@ function startBattle(){
 
   Screens.show('#gameScreen'); ensureAudio(); startMusic();
   if(!App.stage) App.stage = STAGES[0];
-
+  // Debug: log when a battle is starting and what the selected config is
+  console.log('startBattle() - App (pre-build):', { mode: App.mode, rules: App.rules, p1: App.p1, p2: App.p2, stage: App.stage && App.stage.id });
   const {p1Id,p2Id}=buildSpritesForSelection();
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
+
+  // Debug: log created fighter objects and the start grace period
+  console.log('startBattle() - created fighters:', { p1Id, p2Id, p1_preview: { name: p1.name, dead: p1.dead, stocks: p1.stocks }, p2_preview: { name: p2.name, dead: p2.dead, stocks: p2.stocks }, startGrace });
 
   // force spawn to canvas-based positions
   p1.placeSpawn(); p2.placeSpawn();
@@ -630,6 +634,8 @@ function concludeTimed(){
   running=false;
 }
 function showResults(title){
+  // Debug: log why results are being shown
+  console.log('showResults() called', { title, p1_dead: p1 && p1.dead, p2_dead: p2 && p2.dead, startGrace });
   const rt = document.getElementById('resultTitle');
   if (rt) rt.textContent = title || (p1.dead ? 'Player 2 Wins!' : 'Player 1 Wins!');
   const statsEl = document.getElementById('resultStats');
