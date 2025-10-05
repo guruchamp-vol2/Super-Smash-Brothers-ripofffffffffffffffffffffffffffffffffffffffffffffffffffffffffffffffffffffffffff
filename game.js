@@ -178,16 +178,24 @@ function buildSpritesForSelection(){
 // UI bindings
 // Title → Main: accept button, any key, mouse, or touch
 document.addEventListener('DOMContentLoaded', () => {
-  const startBtn = document.getElementById('btnStart');
-  if (!startBtn) return;
+  const title   = document.getElementById('title');
+  const startBtn= document.getElementById('btnStart');
+  if (!title || !startBtn) return; // defensive guard
 
-  const go = () => Screens.show('#main');
+  const go = () => {
+    // Only act if we're still on the title screen
+    if (!title.classList.contains('hidden')) {
+      Screens.show('#main');
+    }
+  };
 
+  // Click on the start button
   startBtn.addEventListener('click', go);
 
+  // Any user input should also start
   const any = () => {
-    const title = document.getElementById('title');
-    if (title && !title.classList.contains('hidden')) go();
+    go();
+    // Remove after first activation to prevent double triggers
     window.removeEventListener('keydown', any);
     window.removeEventListener('mousedown', any);
     window.removeEventListener('touchstart', any);
@@ -197,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('mousedown', any);
   window.addEventListener('touchstart', any, { passive: true });
 });
+
 
 
 $('#gotoSmash')?.addEventListener('click', ()=> Screens.show('#modes'));
