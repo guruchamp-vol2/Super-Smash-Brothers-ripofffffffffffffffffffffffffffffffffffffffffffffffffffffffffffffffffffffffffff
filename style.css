@@ -61,4 +61,6 @@ button.xl{font-size:22px;padding:16px 22px}
 .stocks{display:flex;gap:4px}
 .stock{width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #111 inset}
 .percent{font-size:36px;font-weight:900;text-shadow:0 2px 0 #000}
+.fsbar{height:8px;width:180px;background:#1f2937;border:1px solid #334155;border-radius:6px;overflow:hidden}
+.fsbar>div{height:100%;background:linear-gradient(90deg,#60a5fa,#a78bfa)}
 .pause{position:absolute;inset:0;background:rgba(8,8,12,.72);display:flex;align-items:center;justify-content:center}
