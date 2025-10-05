@@ -43,8 +43,42 @@
         </div>
       </div>
       <div class="grid">
-        <button id="gotoOnline" class="menu gold">Online (Local)</button>
+        <button id="gotoOnline" class="menu gold">Online</button>
         <button id="gotoTrainingShortcut" class="menu green">Training</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ONLINE -->
+  <section id="online" class="screen center hidden">
+    <div class="card w900">
+      <h2>Online</h2>
+      <div class="row gap">
+        <input id="onlineName" type="text" placeholder="Name (optional)">
+      </div>
+      <div class="grid two-col gap">
+        <div class="panel">
+          <h3>Room Code</h3>
+          <div class="row gap">
+            <button id="btnCreateRoom" class="primary">Create Room</button>
+          </div>
+          <div class="row gap mt">
+            <input id="roomCodeInput" type="text" placeholder="Enter Code" style="text-transform:uppercase">
+            <button id="btnJoinRoom">Join</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Random Match</h3>
+          <button id="btnRandom" class="gold">Find Match</button>
+          <div class="muted small mt">Pairs you with another player automatically.</div>
+        </div>
+      </div>
+      <div class="panel mt">
+        <div id="onlineStatus" class="muted">Not connected.</div>
+        <div class="row space mt">
+          <button id="onlineBack" class="ghost">Back</button>
+          <button id="onlineGoSelect" class="primary" disabled>Go to Character Select</button>
+        </div>
       </div>
     </div>
   </section>
@@ -231,6 +265,7 @@
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

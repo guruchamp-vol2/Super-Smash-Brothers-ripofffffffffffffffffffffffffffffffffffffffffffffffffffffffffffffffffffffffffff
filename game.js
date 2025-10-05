@@ -1,6 +1,81 @@
 // Smashlike — FS + extended animation rows (runtime sprites)
 const $=(q)=>document.querySelector(q); const $$=(q)=>[...document.querySelectorAll(q)];
-const Screens={ show(id){ $$('.screen').forEach(s=>s.classList.add('hidden')); $(id).classList.remove('hidden'); }};
+const Screens={ show(id){ $('.screen').forEach(s=>s.classList.add('hidden')); $(id).classList.remove('hidden'); }};
+
+// === ONLINE (client) ===
+const Online = {
+  active: false,
+  socket: null,
+  code: null,
+  role: null, // 'p1' | 'p2'
+  connected: false,
+  peerControls: {left:false,right:false,attack:false,special:false,jump:false,fastfall:false,shield:false,pick:false,use:false,fs:false},
+  sendTimer: 0,
+};
+
+function onlineStatus(msg){ const el = document.getElementById('onlineStatus'); if (el) el.textContent = msg; }
+function setOnlineGoSelect(enabled){ const b = document.getElementById('onlineGoSelect'); if (b){ b.disabled = !enabled; } }
+
+function ensureSocket(){
+  if (Online.socket) return Online.socket;
+  try{
+    // eslint-disable-next-line no-undef
+    const s = io();
+    Online.socket = s;
+    s.on('connect', ()=>{ Online.connected = true; onlineStatus('Connected. Create a room, join one, or find a random match.'); });
+    s.on('disconnect', ()=>{ Online.connected = false; onlineStatus('Disconnected.'); });
+
+    s.on('errorMsg', (e)=>{ onlineStatus(e && e.message ? e.message : 'Server error'); });
+
+    s.on('roomCreated', ({ code, role })=>{
+      Online.code = code; Online.role = role; Online.active = true;
+      onlineStatus(`Room created. Code: ${code} — You are ${role.toUpperCase()}. Share the code and then go to Character Select.`);
+      setOnlineGoSelect(true);
+    });
+    s.on('roomJoined', ({ code, role })=>{
+      Online.code = code; Online.role = role; Online.active = true;
+      onlineStatus(`Joined room ${code}. You are ${role.toUpperCase()}. Go to Character Select.`);
+      setOnlineGoSelect(true);
+    });
+    s.on('playerJoined', ()=>{ onlineStatus(`Peer joined. Room ${Online.code}.`); });
+    s.on('queued', ()=>{ onlineStatus('Queued for random match…'); });
+    s.on('matched', ({ code, role })=>{
+      Online.code = code; Online.role = role; Online.active = true;
+      onlineStatus(`Matched! Room ${code}. You are ${role.toUpperCase()}. Go to Character Select.`);
+      setOnlineGoSelect(true);
+    });
+    s.on('peerReady', ({ role })=>{
+      onlineStatus(`Peer (${role.toUpperCase()}) is ready… waiting for you.`);
+    });
+
+    // Server starts the match when both sent ready
+    // payload: { code, p1:{id,alt}, p2:{id,alt}, rules, stageId }
+    s.on('start', async ({ p1: P1, p2: P2, rules, stageId })=>{
+      try{
+        // Assign App selections from server canonical data
+        const cById = (id)=> CHARACTERS.find(c=>c.id===id) || CHARACTERS[0];
+        App.rules = Object.assign({}, App.rules, rules||{});
+        App.p1.char = cById(P1 && P1.id || 'bruiser'); App.p1.alt = Math.max(0, P1 && P1.alt || 0);
+        App.p2.char = cById(P2 && P2.id || 'ninja');   App.p2.alt = Math.max(0, P2 && P2.alt || 0);
+        App.stage = STAGES.find(s=>s.id===stageId) || STAGES[0];
+        // Ensure P2 is human in online
+        try{ const p2CpuEl = document.getElementById('p2Cpu'); if (p2CpuEl) p2CpuEl.checked = false; }catch{}
+        await startBattle();
+      }catch(e){ console.error('Failed to start match from server', e); }
+    });
+
+    // Input relay from peer
+    s.on('peerInput', ({ controls })=>{
+      Object.assign(Online.peerControls, controls||{});
+    });
+
+    s.on('peerLeft', ()=>{
+      onlineStatus('Peer left the room.');
+    });
+
+  }catch(e){ console.error('Socket.io unavailable', e); }
+  return Online.socket;
+}
 
 const App = {
   mode: 'stock',
@@ -327,6 +402,14 @@ el = $('#configureRules');          if (el) el.addEventListener('click', ()=> Sc
 el = $('#backModes');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
 el = $('#rulesConfirm');            if (el) el.addEventListener('click', ()=> { readRules(); Screens.show('#modes'); });
 
+// Online menu navigation + actions
+el = $('#gotoOnline');              if (el) el.addEventListener('click', ()=> { Screens.show('#online'); ensureSocket(); setOnlineGoSelect(!!Online.active); onlineStatus(Online.connected? 'Connected.':'Connecting…'); });
+el = $('#onlineBack');              if (el) el.addEventListener('click', ()=> Screens.show('#main'));
+el = $('#btnCreateRoom');           if (el) el.addEventListener('click', ()=> { const name=$('#onlineName')?.value||''; ensureSocket(); Online.socket.emit('createRoom', { name }); });
+el = $('#btnJoinRoom');             if (el) el.addEventListener('click', ()=> { const name=$('#onlineName')?.value||''; const code=($('#roomCodeInput')?.value||'').trim().toUpperCase(); if(!code){ onlineStatus('Enter a code.'); return;} ensureSocket(); Online.socket.emit('joinRoom', { code, name }); });
+el = $('#btnRandom');               if (el) el.addEventListener('click', ()=> { const name=$('#onlineName')?.value||''; ensureSocket(); Online.socket.emit('randomQueue', { name }); });
+el = $('#onlineGoSelect');          if (el) el.addEventListener('click', ()=> { if(!Online.active){ onlineStatus('Create/join a room or match first.'); return;} buildCharacterSelect(); Screens.show('#chars'); });
+
 el = document.querySelector('.mode-btn.red');   if (el) el.addEventListener('click', ()=>{ App.mode='stock';  $('#modeBadge')&&($('#modeBadge').textContent='Stock');    buildCharacterSelect(); Screens.show('#chars'); });
 el = document.querySelector('.mode-btn.green'); if (el) el.addEventListener('click', ()=>{ App.mode='training';$('#modeBadge')&&($('#modeBadge').textContent='Training'); buildCharacterSelect(); Screens.show('#chars'); });
 el = document.querySelector('.mode-btn.blue');  if (el) el.addEventListener('click', ()=>{ App.mode='timed';   $('#modeBadge')&&($('#modeBadge').textContent='Timed');    buildCharacterSelect(); Screens.show('#chars'); });
@@ -349,7 +432,21 @@ el = $('#charsReady');
 if (el) el.addEventListener('click', (e)=>{
   e.preventDefault();
   document.activeElement && document.activeElement.blur();
-  startBattle();
+  // Online flow: send ready to server; local flow: start immediately
+  if (Online.active && Online.socket && Online.connected){
+    const my = (Online.role === 'p2') ? App.p2 : App.p1;
+    const payload = { charId: my.char.id, alt: (Online.role==='p2'? App.p2.alt : App.p1.alt) };
+    if (Online.role === 'p1'){
+      payload.rules = App.rules;
+      payload.stageId = (App.stage && App.stage.id) || 'trainingRoom';
+    }
+    Online.socket.emit('ready', payload);
+    const badge = Online.role === 'p1' ? 'P1' : 'P2';
+    const code = Online.code || '—';
+    const st = document.getElementById('onlineStatus'); if (st) st.textContent = `Ready sent (${badge}). Room ${code}. Waiting for peer…`;
+  } else {
+    startBattle();
+  }
 });
 
 function readRules(){
@@ -725,6 +822,25 @@ function updateControls(){
   if(keys['1']||keys[',']) controlsP2.attack=true; if(keys['2']||keys['/']) controlsP2.special=true; if(keys['3']) controlsP2.shield=true; if(keys['.']) controlsP2.pick=true; controlsP2.fs=!!keys['9'];
 }
 
+// During online game, override remote side's controls with peer data and emit local inputs at ~30Hz
+function applyOnlineControls(dt){
+  if (!Online.active || !running || !Online.socket) return;
+  // Decide which side is local vs remote
+  const localIsP1 = (Online.role === 'p1');
+  const local = localIsP1 ? controlsP1 : controlsP2;
+  const remote = localIsP1 ? controlsP2 : controlsP1;
+
+  // apply peer inputs into remote
+  Object.assign(remote, Online.peerControls);
+
+  // send local inputs at ~30Hz
+  Online.sendTimer -= dt;
+  if (Online.sendTimer <= 0){
+    Online.sendTimer = 1/30;
+    try{ Online.socket.emit('input', { controls: local, t: performance.now() }); }catch{}
+  }
+}
+
 // ==== Game loop ====
 let p1,p2; let last=0; let running=false; let paused=false; let itemTimer=0; let timer=0;
 let startGrace = 0; // KO & results lockout at match start
@@ -858,6 +974,7 @@ function frame(dt){
   }
 
   updateControls();
+  applyOnlineControls(dt);
   p1.update(dt,controlsP1); 
   p2.update(dt,controlsP2);
 
