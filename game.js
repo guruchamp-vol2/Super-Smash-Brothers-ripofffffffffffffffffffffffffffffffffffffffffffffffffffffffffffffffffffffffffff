@@ -521,6 +521,13 @@ function startBattle(){
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
 
+  // Respect P2 CPU checkbox — if unchecked, make p2 human (aiLevel 0)
+  try{
+    const p2CpuEl = document.getElementById('p2Cpu');
+    if (p2CpuEl && !p2CpuEl.checked){ p2.aiLevel = 0; }
+    else { p2.aiLevel = App.rules.cpuLevel; }
+  } catch(e){ /* ignore in environments without DOM */ }
+
   // Debug: log created fighter objects and the start grace period
   console.log('startBattle() - created fighters:', { p1Id, p2Id, p1_preview: { name: p1.name, dead: p1.dead, stocks: p1.stocks }, p2_preview: { name: p2.name, dead: p2.dead, stocks: p2.stocks }, startGrace });
 
