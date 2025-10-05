@@ -62,7 +62,10 @@ const MUSIC = [
   { id:'zen', name:'Zen Garden', generator:(ctx)=> plucks(ctx,[0,2,7,9]) },
 ];
 
-const canvas=$('#game'); const ctx=canvas.getContext('2d'); if(ctx) ctx.imageSmoothingEnabled=false;
+const canvas = document.getElementById('game');
+const ctx = canvas ? canvas.getContext('2d') : null;
+if (ctx) ctx.imageSmoothingEnabled = false;
+
 
 const MANIFEST={}; const SPRITES={};
 const ANIMS=[
@@ -228,17 +231,18 @@ $('#openMusic')?.addEventListener('click', ()=> { buildMusic(); Screens.show('#m
 $('#musicBack')?.addEventListener('click', ()=> Screens.show('#chars'));
 $('#musicConfirm')?.addEventListener('click', ()=> Screens.show('#chars'));
 $('#charsReady')?.addEventListener('click', ()=> startBattle());
-
 function readRules(){
-  App.rules.stocks = +($('#ruleStocks')?.value||3);
-  App.rules.time = +($('#ruleTime')?.value||0);
-  App.rules.ratio = +($('#ruleRatio')?.value||1.0);
-  App.rules.itemsOn = $('#ruleItemsOn')?.checked ?? true;
-  App.rules.itemFreq = +($('#ruleItemFreq')?.value||8);
-  App.rules.cpuLevel = +($('#ruleCpuLevel')?.value||3);
-  App.rules.shake = $('#ruleScreenShake')?.checked ?? true;
-  App.rules.sparks = $('#ruleHitSparks')?.checked ?? true;
+  var el;
+  el = document.getElementById('ruleStocks');     App.rules.stocks   = el ? +el.value : 3;
+  el = document.getElementById('ruleTime');       App.rules.time     = el ? +el.value : 0;
+  el = document.getElementById('ruleRatio');      App.rules.ratio    = el ? +el.value : 1.0;
+  el = document.getElementById('ruleItemsOn');    App.rules.itemsOn  = el ? !!el.checked : true;
+  el = document.getElementById('ruleItemFreq');   App.rules.itemFreq = el ? +el.value : 8;
+  el = document.getElementById('ruleCpuLevel');   App.rules.cpuLevel = el ? +el.value : 3;
+  el = document.getElementById('ruleScreenShake');App.rules.shake    = el ? !!el.checked : true;
+  el = document.getElementById('ruleHitSparks');  App.rules.sparks   = el ? !!el.checked : true;
 }
+
 function buildCharacterSelect(){
   const modeMap={stock:'Stock Battle',training:'Training',timed:'Timed'};
   if($('#modeLabel')) $('#modeLabel').textContent = modeMap[App.mode];
@@ -276,14 +280,29 @@ function buildStages(){
   if(!App.stage) App.stage = STAGES[0];
 }
 function buildMusic(){
-  const grid=$('#musicGrid'); if(!grid) return; grid.innerHTML='';
-  MUSIC.forEach(t=>{
-    const el=document.createElement('div'); el.className='item'; el.textContent = t.name;
-    el.onclick=()=>{ App.track=t; startMusic(); $$('#musicGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
+  var grid = document.getElementById('musicGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  MUSIC.forEach(function(t){
+    var el = document.createElement('div');
+    el.className = 'item';
+    el.textContent = t.name;
+    el.onclick = function(){
+      App.track = t;
+      startMusic();
+      Array.prototype.forEach.call(document.querySelectorAll('#musicGrid .item'), function(i){ i.style.outline=''; });
+      el.style.outline = '3px solid var(--accent)';
+    };
     grid.appendChild(el);
   });
-  if(!App.track) App.track=MUSIC[0], startMusic();
+
+  if (!App.track) {
+    App.track = MUSIC[0];
+    startMusic();
+  }
 }
+
 
 // Audio
 let audioCtx=null, currentNodes=[];
@@ -573,14 +592,45 @@ function drawSparks(){
 function collide(a,b){ return (a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y); }
 function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.splice(i,1); }
 
-window.addEventListener('keydown',e=>{
-  if($('#gameScreen') && $('#gameScreen').classList.contains('hidden')) return;
-  if(e.key==='Enter'){ paused=!paused; $('#pause')?.classList.toggle('hidden',!paused); }
-  if(App.mode==='training' && e.key==='i'){ paused=true; $('#pause')?.classList.remove('hidden'); spawnMenu(); }
+window.addEventListener('keydown', function(e){
+  var gs = document.getElementById('gameScreen');
+  if (gs && gs.classList.contains('hidden')) return;
+
+  var pauseEl = document.getElementById('pause');
+
+  if (e.key === 'Enter'){
+    paused = !paused;
+    if (pauseEl) {
+      if (paused) pauseEl.classList.remove('hidden');
+      else pauseEl.classList.add('hidden');
+    }
+  }
+
+  if (App.mode === 'training' && e.key === 'i'){
+    paused = true;
+    if (pauseEl) pauseEl.classList.remove('hidden');
+    spawnMenu();
+  }
 });
-$('#resume')?.addEventListener('click', ()=>{ paused=false; $('#pause')?.classList.add('hidden'); });
-$('#endBattle')?.addEventListener('click', ()=>{ paused=false; $('#pause')?.classList.add('hidden'); endBattle(); });
-$('#spawnItem')?.addEventListener('click', ()=> spawnMenu());
+
+var _resume = document.getElementById('resume');
+if (_resume) _resume.addEventListener('click', function(){
+  paused = false;
+  var p = document.getElementById('pause');
+  if (p) p.classList.add('hidden');
+});
+
+var _end = document.getElementById('endBattle');
+if (_end) _end.addEventListener('click', function(){
+  paused = false;
+  var p = document.getElementById('pause');
+  if (p) p.classList.add('hidden');
+  endBattle();
+});
+
+var _spawn = document.getElementById('spawnItem');
+if (_spawn) _spawn.addEventListener('click', function(){ spawnMenu(); });
+
 
 function spawnMenu(){
   const old = $('#pause .panel .spawnGrid'); if(old) old.remove();
