@@ -94,6 +94,9 @@ button.xl{font-size:22px;padding:16px 22px}
 
 .pause{position:absolute;inset:0;background:rgba(8,8,12,.72);display:flex;align-items:center;justify-content:center}
 
+/* Ensure overlays respect .hidden */
+.pause.hidden{display:none !important}
+
 /* Responsive tweaks */
 @media (max-width:900px){
   .grid.auto{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
