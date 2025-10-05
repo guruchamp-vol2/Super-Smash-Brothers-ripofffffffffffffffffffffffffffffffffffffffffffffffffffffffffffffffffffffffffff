@@ -66,6 +66,29 @@ const canvas = document.getElementById('game');
 const ctx = canvas ? canvas.getContext('2d') : null;
 if (ctx) ctx.imageSmoothingEnabled = false;
 
+// Portrait mapping loaded from assets/portraits.json
+let PORTRAITS = {};
+async function ensurePortraitsLoaded(){
+  if (ensurePortraitsLoaded._done) return;
+  try{
+    const res = await fetch('assets/portraits.json', { cache: 'no-store' });
+    if (res.ok){ PORTRAITS = await res.json(); }
+  }catch(e){ /* ignore; will fallback to color tiles */ }
+  ensurePortraitsLoaded._done = true;
+}
+
+// External sprite index loaded from assets/sprites/index.json
+let SPRITE_INDEX = {};
+async function ensureSpritesIndexLoaded(){
+  if (ensureSpritesIndexLoaded._done) return;
+  try{
+    const res = await fetch('assets/sprites/index.json', { cache: 'no-store' });
+    if (res.ok){ SPRITE_INDEX = await res.json(); }
+  }catch(e){ /* ignore; use procedural */ }
+  ensureSpritesIndexLoaded._done = true;
+}
+function loadImage(src){ return new Promise((resolve,reject)=>{ const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src; }); }
+
 // --- debug overlay (helps diagnose running/paused/results state) ---
 const debugOverlay = (function(){
   try{
@@ -178,15 +201,31 @@ function makeSheetFromColors(colors, animOverride){
   });
   return {sheet,meta};
 }
-function buildSpritesForSelection(){
+async function buildSpritesForSelection(){
+  await ensureSpritesIndexLoaded();
   const p1Char=(App.p1.char||CHARACTERS[0]);
   const p2Char=(App.p2.char||CHARACTERS[1]);
-  const p1Sel=p1Char.alts[App.p1.alt||0].colors;
-  const p2Sel=p2Char.alts[App.p2.alt||0].colors;
-  const p1Id=p1Char.id+'_p1'; const p2Id=p2Char.id+'_p2';
-  [[p1Id,p1Sel,p1Char],[p2Id,p2Sel,p2Char]].forEach(([id,colors,charSpec])=>{
-    const {sheet,meta}=makeSheetFromColors(colors, charSpec.anim||null); SPRITES[id]=sheet; MANIFEST[id]={...meta};
-  });
+
+  async function buildFor(char, side){
+    const id = char.id + '_' + side;
+    // Prefer external sheet if configured
+    const ext = SPRITE_INDEX[char.id];
+    if (ext && ext.sheet && ext.anims && ext.frameSize){
+      try{
+        const img = await loadImage(ext.sheet);
+        SPRITES[id] = img;
+        MANIFEST[id] = { frameSize: ext.frameSize, anims: ext.anims };
+        return id;
+      }catch(e){ /* fallback to procedural */ }
+    }
+    // Procedural fallback using palette + anim override
+    const colors = char.alts[side==='p1'?(App.p1.alt||0):(App.p2.alt||0)].colors;
+    const {sheet,meta} = makeSheetFromColors(colors, char.anim||null);
+    SPRITES[id]=sheet; MANIFEST[id]={...meta};
+    return id;
+  }
+
+  const [p1Id, p2Id] = await Promise.all([ buildFor(p1Char,'p1'), buildFor(p2Char,'p2') ]);
   return {p1Id,p2Id};
 }
 
@@ -224,6 +263,12 @@ el = $('#openMusic');               if (el) el.addEventListener('click', ()=> { 
 el = $('#musicBack');               if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
 el = $('#musicConfirm');            if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
 
+// Character select side toggles
+const p1Btn = document.getElementById('viewP1');
+const p2Btn = document.getElementById('viewP2');
+if (p1Btn){ p1Btn.addEventListener('click', ()=>{ pickSide='p1'; p1Btn.classList.add('primary'); p2Btn&&p2Btn.classList.remove('primary'); }); }
+if (p2Btn){ p2Btn.addEventListener('click', ()=>{ pickSide='p2'; p2Btn.classList.add('primary'); p1Btn&&p1Btn.classList.remove('primary'); }); }
+
 el = $('#charsReady');
 if (el) el.addEventListener('click', (e)=>{
   e.preventDefault();
@@ -246,14 +291,79 @@ function readRules(){
 function buildCharacterSelect(){
   const modeMap={stock:'Stock Battle',training:'Training',timed:'Timed'};
   $('#modeLabel') && ($('#modeLabel').textContent = modeMap[App.mode]);
-  const buildGrid = (sideId, altRowId, side) => {
-    const grid = $(sideId); if(!grid) return; grid.innerHTML = '';
-    CHARACTERS.forEach((c)=>{
-      const el = document.createElement('div'); el.className='item'; el.innerHTML = `<div style="font-weight:800">${c.name}</div><div class="muted">${c.kit}</div>`;
-      el.onclick = ()=> { App[side].char = c; App[side].alt = 0; renderAlts(altRowId, side); $$(`${sideId} .item`).forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
-      grid.appendChild(el);
+  if (!ensurePortraitsLoaded._done){ ensurePortraitsLoaded().then(buildCharacterSelect); }
+
+  // Defaults for both sides
+  App.p1.char = App.p1.char || CHARACTERS[0];
+  App.p2.char = App.p2.char || CHARACTERS[1];
+  App.p1.alt = App.p1.alt||0; App.p2.alt = App.p2.alt||0;
+
+  // Hide old side-by-side grids if present
+  const g1 = document.getElementById('p1Chars'); const g2 = document.getElementById('p2Chars');
+  if (g1) g1.style.display='none'; if (g2) g2.style.display='none';
+
+  // Ensure a unified grid exists under the toggles
+  let ugrid = document.getElementById('charGrid');
+  if (!ugrid){
+    ugrid = document.createElement('div'); ugrid.id='charGrid'; ugrid.className='grid auto';
+    // Prefer to insert after toggles if present, else at top of card
+    const toggles = document.getElementById('charToggles');
+    const card = document.querySelector('#chars .card');
+    if (toggles && toggles.parentElement){ toggles.parentElement.insertBefore(ugrid, toggles.nextSibling); }
+    else if (card){ card.insertBefore(ugrid, card.children[1]||null); }
+  }
+  ugrid.innerHTML='';
+
+  // Helper to update badges and previews
+  function refreshUI(){
+    // Clear badges
+    ugrid.querySelectorAll('.sel-badge').forEach(b=>b.remove());
+    // Place P1/P2 badges on their selected tiles
+    [ ['p1', App.p1.char], ['p2', App.p2.char] ].forEach(([side, ch])=>{
+      const el = ugrid.querySelector(`.char-tile[data-id="${ch.id}"]`);
+      if (el){
+        const b = document.createElement('div'); b.className=`sel-badge ${side}`; b.textContent = side.toUpperCase();
+        Object.assign(b.style,{position:'absolute',right:'6px',bottom:'6px',background: side==='p1'? '#60a5fa':'#f472b6',color:'#000',fontWeight:'900',borderRadius:'10px',padding:'2px 6px',fontSize:'12px'});
+        el.appendChild(b);
+        el.style.outline = '2px solid rgba(255,255,255,0.15)';
+      }
     });
-  };
+    // Update bottom panels
+    const p1Name = document.getElementById('p1Name'); if (p1Name) p1Name.textContent = App.p1.char.name;
+    const p2Name = document.getElementById('p2Name'); if (p2Name) p2Name.textContent = App.p2.char.name;
+    renderAlts('#p1Alts','p1'); renderAlts('#p2Alts','p2');
+  }
+
+  // Build unified grid tiles
+  CHARACTERS.forEach((c)=>{
+    const tile = document.createElement('div');
+    tile.className='char-tile item';
+    tile.dataset.id = c.id;
+    Object.assign(tile.style,{position:'relative', padding:'8px'});
+    // Portrait: use URL if available, else fallback to color block
+    const col = (c.alts && c.alts[0] && c.alts[0].colors ? c.alts[0].colors.body : '#1f2937');
+    const outline = (c.alts && c.alts[0] && c.alts[0].colors ? c.alts[0].colors.outline : '#111827');
+    const portrait = PORTRAITS[c.id] || (c.portrait || null);
+    const thumb = document.createElement('div');
+    if (portrait){
+      Object.assign(thumb.style,{
+        height:'64px',borderRadius:'10px',
+        backgroundImage:`linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.35)), url(${portrait})`,
+        backgroundSize:'cover', backgroundPosition:'center',
+        border:`2px solid ${outline}`
+      });
+    } else {
+      Object.assign(thumb.style,{height:'64px',borderRadius:'10px',background:`linear-gradient(180deg, ${col}, #0b0c12)`, border:`2px solid ${outline}`});
+    }
+    const label = document.createElement('div'); label.textContent=c.name.toUpperCase();
+    Object.assign(label.style,{marginTop:'6px',fontFamily:'Barlow Condensed, system-ui',fontWeight:'900',fontSize:'14px',letterSpacing:'.06em'});
+    tile.appendChild(thumb); tile.appendChild(label);
+    tile.onclick = ()=>{
+      App[pickSide].char = c; App[pickSide].alt = 0; refreshUI();
+    };
+    ugrid.appendChild(tile);
+  });
+
   const renderAlts = (rowId, side) => {
     const row = $(rowId); if(!row) return; row.innerHTML=''; const sel = App[side].char || CHARACTERS[0];
     App[side].char = sel;
@@ -265,10 +375,8 @@ function buildCharacterSelect(){
       row.appendChild(b);
     });
   };
-  buildGrid('#p1Chars','#p1Alts','p1');
-  buildGrid('#p2Chars','#p2Alts','p2');
-  App.p1.char = CHARACTERS[0]; App.p2.char = CHARACTERS[1];
-  renderAlts('#p1Alts','p1'); renderAlts('#p2Alts','p2');
+
+  refreshUI();
 }
 function buildStages(){
   const grid=$('#stageGrid'); if(!grid) return; grid.innerHTML='';
@@ -546,9 +654,10 @@ let p1,p2; let last=0; let running=false; let paused=false; let itemTimer=0; let
 let startGrace = 0; // KO & results lockout at match start
 let preStart = false; // freeze gameplay during countdown
 let countdownT = 0;  // seconds remaining in countdown
+let pickSide = 'p1'; // which side the next character click assigns to
 function opponentOf(f){ return f===p1? p2 : p1; }
 
-function startBattle(){
+async function startBattle(){
   // Hide overlays hard
   document.getElementById('results')?.classList.add('hidden');
   document.getElementById('pause')?.classList.add('hidden');
@@ -557,7 +666,7 @@ function startBattle(){
   if(!App.stage) App.stage = STAGES[0];
   // Debug: log when a battle is starting and what the selected config is
   console.log('startBattle() - App (pre-build):', { mode: App.mode, rules: App.rules, p1: App.p1, p2: App.p2, stage: App.stage && App.stage.id });
-  const {p1Id,p2Id}=buildSpritesForSelection();
+  const {p1Id,p2Id}= await buildSpritesForSelection();
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
 
