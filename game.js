@@ -135,7 +135,7 @@ function drawFigure(g,pal,pose){
   ['l_arm','r_arm','l_leg','r_leg'].forEach(k=>{ const [x1,y1,x2,y2]=pose[k]; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); });
   g.fillStyle=`rgba(${accent[0]},${accent[1]},${accent[2]},${accent[3]/255})`; const cx=(tx1+tx2)/2, cy=(ty1+ty2)/2; g.fillRect(cx-1,cy-1,2,2);
 }
-// removed duplicate FW/FH
+
 function makeSheetFromColors(colors){
   const pal=[rgba(colors.body), rgba(colors.outline), rgba(colors.accent||'#ffffff')];
   const rows=ANIMS.length, cols=Math.max(...ANIMS.map(a=>a[1]));
@@ -143,10 +143,23 @@ function makeSheetFromColors(colors){
   const meta={ frameSize:[FW,FH], anims:{} };
   ANIMS.forEach(([name,frames,fps],r)=>{
     meta.anims[name]={row:r,frames,fps};
-    for(let i=0;i<frames;i++){ const t=i/frames; const pose=POSES[name](t); g.save(); g.translate(i*FW,r*FH);
+    for(let i=0;i<frames;i++){
+      const t=i/frames;
+      const pose=POSES[name](t);
+      g.save();
+      g.translate(i*FW,r*FH);
+
+      // Flicker in hitstun
+      if(name==='hitstun'){
+        g.globalAlpha = 0.75 + 0.25*Math.sin((i/frames)*4*Math.PI);
+      }
+
       drawFigure(g,pal,pose);
-      if(['attack','special','fs'].includes(name)){ g.fillStyle=`rgba(${pal[2][0]},${pal[2][1]},${pal[2][2]},${1-i/frames})`; g.fillRect(12,7,3,2); }
-      if(name==='hitstun'){ g.globalAlpha=0.85+0.15*Math.sin(i/frames*4*Math.PI); }
+
+      if(['attack','special','fs'].includes(name)){
+        g.fillStyle=`rgba(${pal[2][0]},${pal[2][1]},${pal[2][2]},${1-i/frames})`;
+        g.fillRect(12,7,3,2);
+      }
       g.restore();
     }
   });
@@ -163,8 +176,28 @@ function buildSpritesForSelection(){
 }
 
 // UI bindings
-$('#btnStart')?.addEventListener('click', ()=> Screens.show('#main'));
-window.addEventListener('keydown', ()=> { if(!$('#title').classList.contains('hidden')) $('#btnStart')?.click(); }, {once:true});
+// Title → Main: accept button, any key, mouse, or touch
+document.addEventListener('DOMContentLoaded', () => {
+  const startBtn = document.getElementById('btnStart');
+  if (!startBtn) return;
+
+  const go = () => Screens.show('#main');
+
+  startBtn.addEventListener('click', go);
+
+  const any = () => {
+    const title = document.getElementById('title');
+    if (title && !title.classList.contains('hidden')) go();
+    window.removeEventListener('keydown', any);
+    window.removeEventListener('mousedown', any);
+    window.removeEventListener('touchstart', any);
+  };
+
+  window.addEventListener('keydown', any);
+  window.addEventListener('mousedown', any);
+  window.addEventListener('touchstart', any, { passive: true });
+});
+
 
 $('#gotoSmash')?.addEventListener('click', ()=> Screens.show('#modes'));
 $('#gotoTrainingShortcut')?.addEventListener('click', ()=> { App.mode='training'; $('#modeBadge').textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
@@ -497,7 +530,12 @@ function loop(ts){ if(!running) return; if(!last) last=ts; const dt=Math.min(.03
 
 function frame(dt){
   updateControls();
-  p1.update(dt,controlsP1); p2.update(dt,controlsP2);
+  p1.update(dt,controlsP1); 
+  p2.update(dt,controlsP2);
+
+  // process Final Strike & attack hitboxes
+  updateHitboxes(dt, p1, p2);
+
   for(const pr of projectiles){ pr.update(dt); if(collide(pr,p1)&&pr.owner!==p1){ hit(pr.owner,p1,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true;} if(collide(pr,p2)&&pr.owner!==p2){ hit(pr.owner,p2,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true; }}
   for(const h of helpers){ h.update(dt); }
   for(const s of sparks){ s.t-=dt; } 
