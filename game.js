@@ -1,6 +1,6 @@
 // Smashlike — FS + extended animation rows (runtime sprites)
-const $=(q)=>document.querySelector(q); const $$=(q)=>[...document.querySelectorAll(q)];
-const Screens={ show(id){ $$('.screen').forEach(s=>s.classList.add('hidden')); $(id).classList.remove('hidden'); }};
+const $=(q)=>document.querySelector(q); const $=(q)=>[...document.querySelectorAll(q)];
+const Screens={ show(id){ $('.screen').forEach(s=>s.classList.add('hidden')); $(id).classList.remove('hidden'); }};
 
 const App = {
   mode: 'stock',
@@ -230,7 +230,7 @@ function buildCharacterSelect(){
     const grid = $(sideId); if(!grid) return; grid.innerHTML = '';
     CHARACTERS.forEach((c)=>{
       const el = document.createElement('div'); el.className='item'; el.innerHTML = `<div style="font-weight:800">${c.name}</div><div class="muted">${c.kit}</div>`;
-      el.onclick = ()=> { App[side].char = c; App[side].alt = 0; renderAlts(altRowId, side); $$(`${sideId} .item`).forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
+      el.onclick = ()=> { App[side].char = c; App[side].alt = 0; renderAlts(altRowId, side); $(`${sideId} .item`).forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
       grid.appendChild(el);
     });
   };
@@ -254,7 +254,7 @@ function buildStages(){
   const grid=$('#stageGrid'); if(!grid) return; grid.innerHTML='';
   STAGES.forEach(st=>{
     const el=document.createElement('div'); el.className='item'; el.innerHTML=`<div style="font-weight:800">${st.name}</div><div class="muted">${st.platforms.length} platforms</div>`;
-    el.onclick=()=>{ App.stage=st; $$('#stageGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
+    el.onclick=()=>{ App.stage=st; $('#stageGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
     grid.appendChild(el);
   });
   if(!App.stage) App.stage = STAGES[0];
@@ -264,7 +264,7 @@ function buildMusic(){
   grid.innerHTML = '';
   MUSIC.forEach((t)=>{
     const el=document.createElement('div'); el.className='item'; el.textContent=t.name;
-    el.onclick=()=>{ App.track=t; startMusic(); $$('#musicGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
+    el.onclick=()=>{ App.track=t; startMusic(); $('#musicGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
     grid.appendChild(el);
   });
   if (!App.track) { App.track = MUSIC[0]; startMusic(); }
@@ -520,11 +520,11 @@ function startBattle(){
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
 
-  // force spawn to canvas-based positions
-  p1.placeSpawn(); p2.placeSpawn();
-
   running=true; paused=false; items.length=0; projectiles.length=0; helpers.length=0; itemTimer=0; last=0;
   p1.vx=p1.vy=p2.vx=p2.vy=0;
+
+  // force spawn to canvas-based positions
+  p1.placeSpawn(); p2.placeSpawn();
 
   clearKeys(); resetControls(controlsP1); resetControls(controlsP2);
 
