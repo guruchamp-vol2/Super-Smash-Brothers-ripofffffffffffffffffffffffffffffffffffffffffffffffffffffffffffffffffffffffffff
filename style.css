@@ -16,7 +16,7 @@
 }
 
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:16px/1.25 Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:16px/1.25 Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial; overflow-x:hidden}
 
 /* Cinematic gradient background with subtle light flares */
 body::before{
@@ -49,9 +49,12 @@ h1.logo span{color:var(--accent)}
 .row.space{justify-content:space-between}
 .grid{display:grid;gap:16px}
 .grid.two-col{grid-template-columns:1fr 1fr}
+@media (max-width:1600px){ .grid.two-col{ grid-template-columns:1fr } }
 .grid.main-grid{grid-template-columns:1.2fr .8fr;max-width:1100px;width:95vw}
 .grid.auto{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .center{display:flex;align-items:center;justify-content:center}
+/* On short heights, align content to top so users don't need to zoom */
+@media (max-height:820px){ .screen.center{ align-items:flex-start; padding-top:16px } }
 .column{flex-direction:column}
 .hidden{display:none}
 .stack{display:flex;flex-direction:column;gap:12px}
@@ -64,7 +67,7 @@ h1.logo span{color:var(--accent)}
 .small{font-size:12px}
 .muted{color:var(--muted)}
 .side{min-width:260px}
-.screen{position:fixed;inset:0}
+.screen{position:fixed;inset:0;padding:12px}
 
 /* Cards & panels with hard light edge + inner border */
 .card{
@@ -148,6 +151,13 @@ button.xl{ font-size:22px; padding:16px 22px }
   padding:16px; border-radius:18px; background:linear-gradient(180deg,#171a2a,#0f1118); border:1px solid var(--line);
   cursor:pointer; box-shadow:0 12px 28px rgba(2,4,10,.6), inset 0 1px 0 #ffffff10; font-weight:800; position:relative; overflow:hidden;
 }
+@media (max-width:1600px){
+  .grid.auto{ grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px }
+}
+@media (max-width:1280px){
+  .item{ padding:12px }
+  .grid.auto{ grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px }
+}
 .item::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:linear-gradient(180deg,var(--accent), transparent); opacity:.8}
 .item::after{content:""; position:absolute; inset:-20% -10% 70% -10%; transform:skew(-18deg) rotate(-10deg); background:linear-gradient(90deg, rgba(255,255,255,.18), rgba(255,255,255,.05), transparent)}
 .item:hover{transform:translateY(-3px); transition:all .12s ease}
@@ -191,8 +201,16 @@ button.xl{ font-size:22px; padding:16px 22px }
 /* Make the game layout responsive so you don't need to zoom out */
 @media (max-width:1400px){
   #game{ width:min(100%,1100px); height:auto }
-  #gameScreen .row.gap{ flex-direction:column; align-items:center }
+  #gameScreen .row.gap{ flex-direction:column; align-items:center; gap:12px }
   .side{ min-width:0; width:100% }
+}
+@media (max-width:1280px){
+  .w1100{ width:min(96vw, 980px) }
+  .w900{ width:min(96vw, 880px) }
+  .menu{ height:100px; font-size:32px }
+}
+@media (max-width:1100px){
+  .percent{ font-size:40px }
 }
 @media (max-width:1200px){
   h1.logo{ font-size:56px }
