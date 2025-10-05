@@ -198,14 +198,47 @@ const POSES={idle:pose_idle, walk:pose_walk, run:pose_run, jump:pose_jump, aeria
 
 function rgba(hex,a=1){ const c=hex.replace('#',''); const n=parseInt(c,16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return [r,g,b,Math.floor(255*a)]; }
 function drawFigure(g,pal,pose){
-  const [body,outline,accent]=pal; const [tx1,ty1,tx2,ty2]=pose.torso;
-  g.fillStyle=`rgba(${body[0]},${body[1]},${body[2]},${body[3]/255})`; g.strokeStyle=`rgba(${outline[0]},${outline[1]},${outline[2]},${outline[3]/255})`;
-  g.fillRect(tx1-1,ty1,3,ty2-ty1); g.strokeRect(tx1-1,ty1,3,ty2-ty1);
-  const [hx,hy]=pose.head; g.fillRect(hx-2,hy-2,4,4); g.strokeRect(hx-2,hy-2,4,4);
-  g.fillStyle='rgba(0,0,0,1)'; g.fillRect(hx-1,hy,1,1); g.fillRect(hx+1,hy,1,1);
-  g.strokeStyle=`rgba(${body[0]},${body[1]},${body[2]},${body[3]/255})`; g.lineWidth=2;
-  ['l_arm','r_arm','l_leg','r_leg'].forEach(k=>{ const [x1,y1,x2,y2]=pose[k]; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); });
-  g.fillStyle=`rgba(${accent[0]},${accent[1]},${accent[2]},${accent[3]/255})`; const cx=(tx1+tx2)/2, cy=(ty1+ty2)/2; g.fillRect(cx-1,cy-1,2,2);
+  // Blocky 8-bit character renderer (matches provided sheet style)
+  const [primary,secondary,accent]=pal; // primary=shirt, secondary=pants, accent=belt/detail
+  const [tx1,ty1,tx2,ty2]=pose.torso;
+  const cx=(tx1+tx2)/2;
+  const col = (c)=>`rgba(${c[0]},${c[1]},${c[2]},${(c[3]||255)/255})`;
+
+  // Derived palette
+  const skin=[241,194,141,255];
+  const hair=[45,35,30,255];
+
+  // Head: 6x5 block with two hair rows
+  const [hx,hy]=pose.head;
+  g.fillStyle=`rgba(${hair[0]},${hair[1]},${hair[2]},1)`; g.fillRect(hx-3,hy-3,6,2);
+  g.fillStyle=`rgba(${skin[0]},${skin[1]},${skin[2]},1)`; g.fillRect(hx-3,hy-1,6,4);
+  // Eyes
+  g.fillStyle='#000'; g.fillRect(hx-2,hy,1,1); g.fillRect(hx+1,hy,1,1);
+
+  // Torso: 6x6 shirt
+  g.fillStyle=col(primary); g.fillRect(cx-3,ty1+1,6,6);
+
+  // Helper: draw pixel segment with squares along line
+  function seg(x1,y1,x2,y2,w,color){
+    const dx=x2-x1, dy=y2-y1; const len=Math.max(1,Math.hypot(dx,dy));
+    const steps=Math.ceil(len/1.2); g.fillStyle=color;
+    for(let i=0;i<=steps;i++){ const t=i/steps; const x=x1+dx*t, y=y1+dy*t; g.fillRect(Math.round(x-w/2),Math.round(y-w/2),w,w); }
+  }
+
+  // Arms from shoulders to pose endpoints (skin color)
+  const shoulderY=ty1+3; const lShoulder=cx-3, rShoulder=cx+3;
+  const [lax1,lay1,lax2,lay2]=pose.l_arm; const [rax1,ray1,rax2,ray2]=pose.r_arm;
+  seg(lShoulder,shoulderY,lax2,lay2,2,`rgba(${skin[0]},${skin[1]},${skin[2]},1)`);
+  seg(rShoulder,shoulderY,rax2,ray2,2,`rgba(${skin[0]},${skin[1]},${skin[2]},1)`);
+
+  // Legs from hips to pose endpoints (pants color)
+  const hipY=ty1+7; const lHip=cx-2, rHip=cx+2;
+  const [llx1,lly1,llx2,lly2]=pose.l_leg; const [rlx1,rly1,rlx2,rly2]=pose.r_leg;
+  seg(lHip,hipY,llx2,lly2,2,col(secondary));
+  seg(rHip,hipY,rlx2,rly2,2,col(secondary));
+
+  // Accent belt
+  g.fillStyle=col(accent); g.fillRect(cx-1,ty1+5,2,1);
 }
 
 function makeSheetFromColors(colors, animOverride){
