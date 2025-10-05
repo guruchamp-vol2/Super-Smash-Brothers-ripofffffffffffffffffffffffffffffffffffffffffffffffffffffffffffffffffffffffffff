@@ -66,6 +66,19 @@ const canvas = document.getElementById('game');
 const ctx = canvas ? canvas.getContext('2d') : null;
 if (ctx) ctx.imageSmoothingEnabled = false;
 
+// --- debug overlay (helps diagnose running/paused/results state) ---
+const debugOverlay = (function(){
+  try{
+    const d = document.createElement('div'); d.id='debugOverlay';
+    Object.assign(d.style,{
+      position:'fixed', right:'12px', top:'12px', padding:'8px 10px', background:'rgba(0,0,0,0.6)', color:'#fff', fontSize:'12px', zIndex:99999, borderRadius:'8px', fontFamily:'monospace'
+    });
+    document.body && document.body.appendChild(d);
+    return d;
+  }catch(e){ return null; }
+})();
+function updateDebug(){ try{ if(!debugOverlay) return; debugOverlay.textContent = `running:${running} paused:${paused} startGrace:${(startGrace||0).toFixed(2)} p1.dead:${p1?p1.dead:false} p2.dead:${p2?p2.dead:false} p1.stocks:${p1?p1.stocks:'-'} p2.stocks:${p2?p2.stocks:'-'}` }catch(e){} }
+
 // ===== runtime sprite gen =====
 const MANIFEST={}; const SPRITES={};
 const ANIMS=[
@@ -541,7 +554,7 @@ function startBattle(){
 
   timer = App.rules.time>0? App.rules.time*60 : 0;
   startGrace = 1.25; // <== prevent instant KO/results
-  updateHUD(); requestAnimationFrame(loop);
+  updateHUD(); updateDebug(); requestAnimationFrame(loop);
 }
 function endBattle(){ running=false; Screens.show('#chars'); }
 
@@ -563,6 +576,7 @@ function frame(dt){
   // Defensive: if results overlay is visible, do not run updates
   const resultsEl = document.getElementById('results');
   if (resultsEl && !resultsEl.classList.contains('hidden')){
+    updateDebug();
     return;
   }
   if(startGrace>0) startGrace -= dt;
@@ -599,6 +613,7 @@ function frame(dt){
 
   // Don’t allow immediate results during the grace window
   if(startGrace<=0 && App.mode!=='training' && (p1.dead||p2.dead)){ showResults(); running=false; }
+  updateDebug();
 }
 function drawSparks(){ for(const s of sparks){ ctx.globalAlpha=Math.max(0,s.t/0.2); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(s.x,s.y,8*(s.t/0.2),0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } }
 function collide(a,b){ return (a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y); }
@@ -654,6 +669,7 @@ function showResults(title){
   paused = true;
 
   const rt = document.getElementById('resultTitle');
+  updateDebug();
   if (rt) rt.textContent = title || (p1.dead ? 'Player 2 Wins!' : 'Player 1 Wins!');
   const statsEl = document.getElementById('resultStats');
   if (statsEl){
