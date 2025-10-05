@@ -11,12 +11,6 @@ const App = {
   track: null,
 };
 
-// ====== HARD: never let Enter do anything ======
-window.addEventListener('keydown', (e)=>{
-  if (e.key === 'Enter'){ e.preventDefault(); e.stopPropagation(); }
-}, true);
-
-// ====== Data ======
 const CHARACTERS = [
   { id:'bruiser', name:'Bruiser', kit:'heavy', stats:{weight:1.1, speed:1.0},
     alts:[
@@ -68,12 +62,11 @@ const MUSIC = [
   { id:'zen', name:'Zen Garden', generator:(ctx)=> plucks(ctx,[0,2,7,9]) },
 ];
 
-// ====== Canvas ======
 const canvas = document.getElementById('game');
 const ctx = canvas ? canvas.getContext('2d') : null;
 if (ctx) ctx.imageSmoothingEnabled = false;
 
-// ====== Runtime sprite gen ======
+// ===== runtime sprite gen =====
 const MANIFEST={}; const SPRITES={};
 const ANIMS=[
   ['idle',8,12], ['walk',10,12], ['run',8,16],
@@ -177,7 +170,7 @@ function buildSpritesForSelection(){
   return {p1Id,p2Id};
 }
 
-// ====== UI bindings ======
+// ===== UI bindings =====
 document.addEventListener('DOMContentLoaded', () => {
   const title   = document.getElementById('title');
   const startBtn= document.getElementById('btnStart');
@@ -211,7 +204,6 @@ el = $('#openMusic');               if (el) el.addEventListener('click', ()=> { 
 el = $('#musicBack');               if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
 el = $('#musicConfirm');            if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
 
-// Ready
 el = $('#charsReady');
 if (el) el.addEventListener('click', (e)=>{
   e.preventDefault();
@@ -219,7 +211,6 @@ if (el) el.addEventListener('click', (e)=>{
   startBattle();
 });
 
-// ====== Rules ======
 function readRules(){
   let el;
   el = document.getElementById('ruleStocks');     App.rules.stocks   = el ? +el.value : 3;
@@ -232,7 +223,6 @@ function readRules(){
   el = document.getElementById('ruleHitSparks');  App.rules.sparks   = el ? !!el.checked : true;
 }
 
-// ====== Select builders ======
 function buildCharacterSelect(){
   const modeMap={stock:'Stock Battle',training:'Training',timed:'Timed'};
   $('#modeLabel') && ($('#modeLabel').textContent = modeMap[App.mode]);
@@ -280,7 +270,7 @@ function buildMusic(){
   if (!App.track) { App.track = MUSIC[0]; startMusic(); }
 }
 
-// ====== Audio ======
+// ==== Audio ====
 let audioCtx=null, currentNodes=[];
 function ensureAudio(){ if(!audioCtx){ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); } }
 function stopMusic(){ currentNodes.forEach(n=>{try{n.stop? n.stop(): n.disconnect()}catch{} }); currentNodes=[]; }
@@ -323,7 +313,7 @@ function plucks(ctx, steps){
   return nodes;
 }
 
-// ====== Engine ======
+// ==== Engine + FS ====
 const G=1800, FRICTION=0.82, AIR_FRICTION=0.91, JUMP_V=620;
 const FS_CHARGE_HIT=0.8, FS_CHARGE_TAKEN=0.4;
 
@@ -387,8 +377,12 @@ class Fighter extends Entity{
     this.x += this.vx*dt; this.y += this.vy*dt;
     this.collideStage();
 
-    const B=App.stage.bounds;
-    if(this.y>canvas.height+220 || this.x<-220 || this.x>B.w-(B.w-canvas.width)+220 || this.y<-220){ this.fall(); }
+    // ===== blast zones relative to the visible canvas ONLY
+    if(startGrace<=0){
+      if(this.y>canvas.height+220 || this.y<-220 || this.x<-220 || this.x>canvas.width+220){
+        this.fall();
+      }
+    }
 
     if(this.fsActive){ this.tFS-=dt; if(this.tFS<=0) this.fsActive=false; }
 
@@ -404,7 +398,8 @@ class Fighter extends Entity{
     else if(this.onGround && speed>15) this.anim='walk';
     else this.anim='idle';
 
-    const A=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).anims[this.anim]; const fps=A.fps; const max=A.frames; this.ft+=dt; const adv=1/fps;
+    const A=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).anims[this.anim];
+    const fps=A.fps; const max=A.frames; this.ft+=dt; const adv=1/fps;
     while(this.ft>=adv){ this.ft-=adv; this.frame=(this.frame+1)%max; }
   }
   fall(){
@@ -425,7 +420,8 @@ class Fighter extends Entity{
     }
   }
   render(){
-    const A=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).anims[this.anim]; const fw=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[0], fh=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[1];
+    const A=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).anims[this.anim];
+    const fw=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[0], fh=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[1];
     const sx=this.frame*fw, sy=A.row*fh; const px=Math.round(this.x), py=Math.round(this.y);
     ctx.save(); ctx.imageSmoothingEnabled=false;
     if(this.dir<0){ ctx.scale(-1,1); ctx.drawImage(this.sheet, sx,sy,fw,fh, -px-this.w, py, this.w, this.h); }
@@ -491,11 +487,11 @@ class Helper{
   render(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,this.w,this.h); } }
 function spawnRandomItem(){ const roll=Math.random(); if(roll<.34) items.push(new Heart()); else if(roll<.68) items.push(new Bomb()); else items.push(new AssistTrophy()); }
 
-// ====== Controls ======
+// ==== Controls ====
 const keys={};
 function clearKeys(){ for(const k of Object.keys(keys)) delete keys[k]; }
-window.addEventListener('keydown',e=>{ if(e.key==='Enter') return; keys[e.key]=true; });
-window.addEventListener('keyup',e=>{ if(e.key==='Enter') return; keys[e.key]=false; });
+window.addEventListener('keydown',e=>{ keys[e.key]=true; });
+window.addEventListener('keyup',e=>{ keys[e.key]=false; });
 
 const controlsP1={left:false,right:false,attack:false,special:false,jump:false,fastfall:false,shield:false,pick:false,use:false,fs:false};
 const controlsP2={left:false,right:false,attack:false,special:false,jump:false,fastfall:false,shield:false,pick:false,use:false,fs:false};
@@ -507,11 +503,13 @@ function updateControls(){
   if(keys['1']) controlsP2.attack=true; if(keys['2']) controlsP2.special=true; if(keys['3']) controlsP2.shield=true; if(keys['.']) controlsP2.pick=true; controlsP2.fs=!!keys['9'];
 }
 
-// ====== Game loop ======
+// ==== Game loop ====
 let p1,p2; let last=0; let running=false; let paused=false; let itemTimer=0; let timer=0;
+let startGrace = 0; // KO & results lockout at match start
 function opponentOf(f){ return f===p1? p2 : p1; }
 
 function startBattle(){
+  // Hide overlays hard
   document.getElementById('results')?.classList.add('hidden');
   document.getElementById('pause')?.classList.add('hidden');
 
@@ -522,14 +520,16 @@ function startBattle(){
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
 
+  // force spawn to canvas-based positions
+  p1.placeSpawn(); p2.placeSpawn();
+
   running=true; paused=false; items.length=0; projectiles.length=0; helpers.length=0; itemTimer=0; last=0;
   p1.vx=p1.vy=p2.vx=p2.vy=0;
 
   clearKeys(); resetControls(controlsP1); resetControls(controlsP2);
-  // critical: ensure Enter can’t toggle anything leftover
-  keys['Enter']=false;
 
   timer = App.rules.time>0? App.rules.time*60 : 0;
+  startGrace = 1.25; // <== prevent instant KO/results
   updateHUD(); requestAnimationFrame(loop);
 }
 function endBattle(){ running=false; Screens.show('#chars'); }
@@ -549,13 +549,19 @@ function formatTime(sec){ const m=Math.floor(sec/60); const s=Math.floor(sec%60)
 function loop(ts){ if(!running) return; if(!last) last=ts; const dt=Math.min(.033,(ts-last)/1000); last=ts; if(!paused){ frame(dt); } requestAnimationFrame(loop); }
 
 function frame(dt){
+  if(startGrace>0) startGrace -= dt;
+
   updateControls();
   p1.update(dt,controlsP1); 
   p2.update(dt,controlsP2);
 
   updateHitboxes(dt, p1, p2);
 
-  for(const pr of projectiles){ pr.update(dt); if(collide(pr,p1)&&pr.owner!==p1){ hit(pr.owner,p1,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true;} if(collide(pr,p2)&&pr.owner!==p2){ hit(pr.owner,p2,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true; }}
+  for(const pr of projectiles){
+    pr.update(dt);
+    if(collide(pr,p1)&&pr.owner!==p1){ hit(pr.owner,p1,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true;}
+    if(collide(pr,p2)&&pr.owner!==p2){ hit(pr.owner,p2,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true; }
+  }
   for(const h of helpers){ h.update(dt); }
   for(const s of sparks){ s.t-=dt; } 
   removeDead(projectiles); removeDead(helpers); for(let i=sparks.length-1;i>=0;i--) if(sparks[i].t<=0) sparks.splice(i,1);
@@ -575,13 +581,14 @@ function frame(dt){
   drawSparks();
   updateHUD();
 
-  if(App.mode!=='training' && (p1.dead||p2.dead)){ showResults(); running=false; }
+  // Don’t allow immediate results during the grace window
+  if(startGrace<=0 && App.mode!=='training' && (p1.dead||p2.dead)){ showResults(); running=false; }
 }
 function drawSparks(){ for(const s of sparks){ ctx.globalAlpha=Math.max(0,s.t/0.2); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(s.x,s.y,8*(s.t/0.2),0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } }
 function collide(a,b){ return (a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y); }
 function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.splice(i,1); }
 
-// ====== Pause / overlays (Escape only) ======
+// ==== Pause / overlays (Escape) ====
 window.addEventListener('keydown', function(e){
   const gs = document.getElementById('gameScreen');
   if (!gs || gs.classList.contains('hidden')) return;
@@ -633,12 +640,6 @@ function showResults(title){
   }
   document.getElementById('results')?.classList.remove('hidden');
 }
-document.getElementById('again')?.addEventListener('click', function(){
-  document.getElementById('results')?.classList.add('hidden'); startBattle();
-});
-document.getElementById('toSelect')?.addEventListener('click', function(){
-  document.getElementById('results')?.classList.add('hidden'); Screens.show('#chars');
-});
 
 let shakeAmt=0, shakeEnd=0;
 function shake(mag, ms){ shakeAmt=mag; shakeEnd=performance.now()+ms; const tick=()=>{ if(performance.now()<shakeEnd){ const dx=(Math.random()*shakeAmt-shakeAmt/2),dy=(Math.random()*shakeAmt-shakeAmt/2); ctx.setTransform(1,0,0,1,dx,dy); requestAnimationFrame(tick); } else ctx.setTransform(1,0,0,1,0,0); }; tick(); }
