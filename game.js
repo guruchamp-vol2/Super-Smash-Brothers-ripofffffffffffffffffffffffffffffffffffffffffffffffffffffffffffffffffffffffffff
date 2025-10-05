@@ -89,6 +89,34 @@ async function ensureSpritesIndexLoaded(){
 }
 function loadImage(src){ return new Promise((resolve,reject)=>{ const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src; }); }
 
+// Build an animated sheet from a single portrait by applying subtle transforms per frame
+function makeSheetFromPortrait(img){
+  const rows=ANIMS.length; const framesPerRow=Math.max(...ANIMS.map(a=>a[1]));
+  const fw=48, fh=48; // logical source frame size
+  const sheet=document.createElement('canvas'); sheet.width=framesPerRow*fw; sheet.height=rows*fh; const g=sheet.getContext('2d'); g.imageSmoothingEnabled=false;
+  const meta={ frameSize:[fw,fh], anims:{} };
+  const scale = Math.min(fw*0.9/img.width, fh*0.9/img.height);
+  const drawFrame=(r,i,animName,frames)=>{
+    const t=i/frames; const cx=i*fw+fw/2, cy=r*fh+fh/2; g.save(); g.translate(cx,cy);
+    let offx=0, offy=0, rot=0, sx=scale, sy=scale;
+    switch(animName){
+      case 'idle': offy = Math.sin(t*2*Math.PI)*2; break;
+      case 'walk': offx = Math.sin(t*2*Math.PI)*2; offy = Math.cos(t*2*Math.PI)*1; break;
+      case 'run': offx = Math.sin(t*4*Math.PI)*3; rot = Math.sin(t*2*Math.PI)*0.05; break;
+      case 'jump': offy = -6*Math.sin(Math.min(1,t)*Math.PI); break;
+      case 'aerial': rot = Math.sin(t*2*Math.PI)*0.06; break;
+      case 'attack': offx = (i<frames*0.5? 4: -2); rot = (i<frames*0.5? 0.08: -0.04); break;
+      case 'special': offx = (Math.sin(t*2*Math.PI)>0? 3:-3); break;
+      case 'hitstun': offx = (i%2?1:-1)*2; offy=(i%2?-1:1)*2; break;
+      case 'ko': rot = t*0.6; offy = Math.min(12, t*24); break;
+      case 'fs': sx=sy=scale*1.05; offx = Math.sin(t*2*Math.PI)*2; offy = Math.cos(t*2*Math.PI)*2; break;
+    }
+    g.rotate(rot); g.drawImage(img, -img.width*scale/2+offx, -img.height*scale/2+offy, img.width*scale, img.height*scale); g.restore();
+  };
+  ANIMS.forEach(([name,frames,fps],r)=>{ meta.anims[name]={row:r,frames,fps}; for(let i=0;i<frames;i++) drawFrame(r,i,name,frames); });
+  return {sheet,meta};
+}
+
 // --- debug overlay (helps diagnose running/paused/results state) ---
 const debugOverlay = (function(){
   try{
@@ -215,6 +243,16 @@ async function buildSpritesForSelection(){
         const img = await loadImage(ext.sheet);
         SPRITES[id] = img;
         MANIFEST[id] = { frameSize: ext.frameSize, anims: ext.anims };
+        return id;
+      }catch(e){ /* fallback to portrait/procedural */ }
+    }
+    // Try building from a portrait if available
+    const portraitSrc = PORTRAITS[char.id];
+    if (portraitSrc){
+      try{
+        const pimg = await loadImage(portraitSrc);
+        const {sheet,meta} = makeSheetFromPortrait(pimg);
+        SPRITES[id]=sheet; MANIFEST[id]={...meta};
         return id;
       }catch(e){ /* fallback to procedural */ }
     }
@@ -662,7 +700,7 @@ async function startBattle(){
   document.getElementById('results')?.classList.add('hidden');
   document.getElementById('pause')?.classList.add('hidden');
 
-  Screens.show('#gameScreen'); ensureAudio(); startMusic();
+  Screens.show('#gameScreen'); ensureAudio(); startMusic(); await ensurePortraitsLoaded();
   if(!App.stage) App.stage = STAGES[0];
   // Debug: log when a battle is starting and what the selected config is
   console.log('startBattle() - App (pre-build):', { mode: App.mode, rules: App.rules, p1: App.p1, p2: App.p2, stage: App.stage && App.stage.id });
@@ -705,11 +743,36 @@ function endBattle(){ running=false; Screens.show('#chars'); }
 
 function updateHUD(){
   const h1=$('#hudP1'), h2=$('#hudP2');
-  const fs1 = `<div class="fsbar"><div style="width:${p1?Math.floor(p1.fs):0}%;"></div></div>`;
-  const fs2 = `<div class="fsbar"><div style="width:${p2?Math.floor(p2.fs):0}%;"></div></div>`;
-  const t1 = `<div class="percent">${Math.floor(p1? p1.damage:0)}%</div>${fs1}<div class="stocks">${renderStocks(p1)}</div>`;
-  const t2 = `<div class="stocks">${renderStocks(p2)}</div>${fs2}<div class="percent">${Math.floor(p2? p2.damage:0)}%</div>`;
-  h1.innerHTML=t1; h2.innerHTML=t2;
+  const parts=(v)=>{ const n=Math.max(0, v|0); const d=Math.floor((v%1)*100); return {n, d} };
+  const mkCard=(side, f)=>{
+    const id = f && f.spec ? f.spec.id : (side==='p1'? (App.p1.char&&App.p1.char.id): (App.p2.char&&App.p2.char.id));
+    const src = (PORTRAITS && PORTRAITS[id]) || '';
+    const fs = `<div class="fsbar"><div style="width:${f?Math.floor(f.fs):0}%;"></div></div>`;
+    const pct = f? f.damage: 0; const pp=parts(pct);
+    const badge = side==='p1'? 'P1' : ( (f && f.aiLevel>0)? 'CPU' : 'P2');
+    const name = f && f.name ? f.name : (id||'—');
+    const imgStyle = src? `background-image: url(${src}); background-size: cover; background-position: center;` : '';
+    const card = `
+      <div class="hudcard" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;background:rgba(8,10,16,.65);backdrop-filter:blur(3px);border:1px solid rgba(255,255,255,0.08)">
+        <div class="portrait" style="width:44px;height:44px;border-radius:8px;border:2px solid rgba(255,255,255,0.18);${imgStyle}"></div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:6px;font-weight:900;letter-spacing:.04em">
+            <span>${name.toUpperCase()}</span>
+            <span style="background:${side==='p1'?'#60a5fa':'#f472b6'};color:#000;padding:1px 6px;border-radius:10px;font-size:12px">${badge}</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:2px">
+            <span class="percent" style="font-size:40px;line-height:34px;font-weight:900;text-shadow:2px 2px 0 #000,-2px 2px 0 #000,2px -2px 0 #000,-2px -2px 0 #000">${pp.n}</span>
+            <span style="font-size:16px;opacity:.9;transform:translateY(-4px)">.${pp.d.toString().padStart(2,'0')}</span>
+            <span style="font-size:18px;margin-left:2px">%</span>
+          </div>
+          ${fs}
+        </div>
+        <div class="stocks" style="margin-left:8px;display:flex;gap:6px">${renderStocks(f)}</div>
+      </div>`;
+    return card;
+  };
+  h1.innerHTML = mkCard('p1', p1);
+  h2.innerHTML = mkCard('p2', p2);
   $('#hudTimer').textContent = App.mode==='training' ? 'Training' : (App.mode==='timed' && timer>0 ? formatTime(timer) : 'Battle');
 }
 function renderStocks(f){ if(App.mode==='training') return '<div class="stock"></div>'; let s=''; for(let i=0;i<(f?f.stocks:0);i++) s+='<div class="stock"></div>'; return s; }
@@ -837,23 +900,47 @@ function concludeTimed(){
   running=false;
 }
 function showResults(title){
-  // Debug: log why results are being shown
   console.log('showResults() called', { title, p1_dead: p1 && p1.dead, p2_dead: p2 && p2.dead, startGrace });
+  running = false; paused = true; updateDebug();
 
-  // Immediately stop the game loop and disable controls so the overlay is authoritative
-  running = false;
-  paused = true;
+  // Determine winner/placement
+  let p1Place = 1, p2Place = 2;
+  if (title){ /* explicit */ }
+  else if (p1 && p2){ if (p1.dead && !p2.dead) { p1Place=2; p2Place=1; } else if (!p1.dead && p2.dead) { p1Place=1; p2Place=2; } }
 
   const rt = document.getElementById('resultTitle');
-  updateDebug();
-  if (rt) rt.textContent = title || (p1.dead ? 'Player 2 Wins!' : 'Player 1 Wins!');
+  if (rt){ rt.textContent = 'GAME!'; rt.style.fontSize='56px'; rt.style.letterSpacing='.06em'; }
+
+  const card = (f, place, side) => {
+    const id = f && f.spec ? f.spec.id : 'unknown';
+    const src = PORTRAITS && PORTRAITS[id] ? PORTRAITS[id] : '';
+    const name = (f && f.name) ? f.name.toUpperCase() : id.toUpperCase();
+    const badge = side==='p1' ? 'P1' : (f && f.aiLevel>0 ? 'CPU' : 'P2');
+    const topColor = side==='p1' ? '#ef4444' : '#111827';
+    const sub = side==='p1' ? '#ffccd5' : '#d1d5db';
+    const k = (f && f.stats && f.stats.kos)||0; const falls=(f && f.stats && f.stats.falls)||0; const dealt=(f && f.stats && f.stats.dealt)||0;
+    const img = src ? `background-image:linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.25)), url(${src}); background-size:cover; background-position:center;` : '';
+    return `
+      <div class="rescard" style="flex:1;min-width:260px;border-radius:16px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,0.06)">
+        <div style="height:120px;${img}"></div>
+        <div style="background:${topColor};color:#fff;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font-weight:900;letter-spacing:.04em">${name}</div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="background:#fff;color:#000;border-radius:10px;padding:2px 8px;font-weight:900">${badge}</span><span style="font-size:28px;font-weight:900">${place}</span></div>
+        </div>
+        <div style="background:linear-gradient(180deg,#0f1116,#0b0c12);color:${sub};padding:10px 12px;">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><span>Total</span><span style="font-weight:900;color:#fff">${(k - falls) >= 0? '+':''}${(k - falls)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><span>KOs</span><span style="color:#fff">${k}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><span>Falls</span><span style="color:#fff">${falls}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0"><span>Damage Dealt</span><span style="color:#fff">${dealt.toFixed(1)}</span></div>
+        </div>
+      </div>`;
+  };
+
   const statsEl = document.getElementById('resultStats');
   if (statsEl){
-    statsEl.innerHTML='';
-    statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P1 — ${p1.name}</h3><div>Damage Dealt: ${p1.stats.dealt.toFixed(1)}</div><div>Falls: ${p1.stats.falls}</div></div>`);
-    statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P2 — ${p2.name}</h3><div>Damage Dealt: ${p2.stats.dealt.toFixed(1)}</div><div>Falls: ${p2.stats.falls}</div></div>`);
+    statsEl.innerHTML = `<div style="display:flex;gap:16px;flex-wrap:wrap">${card(p1,p1Place,'p1')}${card(p2,p2Place,'p2')}</div>`;
   }
-  document.getElementById('results')?.classList.remove('hidden');
+  const results = document.getElementById('results'); if (results) results.classList.remove('hidden');
 }
 
 let shakeAmt=0, shakeEnd=0;
