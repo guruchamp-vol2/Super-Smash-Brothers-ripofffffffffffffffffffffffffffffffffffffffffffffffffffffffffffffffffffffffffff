@@ -560,6 +560,11 @@ function formatTime(sec){ const m=Math.floor(sec/60); const s=Math.floor(sec%60)
 function loop(ts){ if(!running) return; if(!last) last=ts; const dt=Math.min(.033,(ts-last)/1000); last=ts; if(!paused){ frame(dt); } requestAnimationFrame(loop); }
 
 function frame(dt){
+  // Defensive: if results overlay is visible, do not run updates
+  const resultsEl = document.getElementById('results');
+  if (resultsEl && !resultsEl.classList.contains('hidden')){
+    return;
+  }
   if(startGrace>0) startGrace -= dt;
 
   updateControls();
