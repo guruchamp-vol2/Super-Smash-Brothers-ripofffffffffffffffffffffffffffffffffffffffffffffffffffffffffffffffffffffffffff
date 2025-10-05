@@ -94,6 +94,7 @@
         <button class="mode-btn red" data-mode="stock">Stock Battle</button>
         <button class="mode-btn green" data-mode="training">Training</button>
         <button class="mode-btn blue" data-mode="timed">Timed (KOs - Falls)</button>
+        <button class="mode-btn purple" data-mode="hyper">Hyper Smash</button>
       </div>
       <div class="sub muted">Tip: Use the Rules to customize stocks, items, CPU level, and more.</div>
       <div class="row space mt">
@@ -135,9 +136,25 @@
           </label>
         </div>
         <div class="panel">
+          <h3>Teams</h3>
+          <label><input id="ruleTagTeam" type="checkbox"> Tag Team (2v2)</label>
+          <label>Team Size (2–3)
+            <input id="ruleTeamSize" type="number" min="2" max="3" value="2">
+          </label>
+        </div>
+        <div class="panel">
+          <h3>Power-Ups</h3>
+          <label><input id="rulePowerUpsOn" type="checkbox" checked> Enable Power-Ups</label>
+          <label>Power-Up Frequency (secs)
+            <input id="rulePowerUpFreq" type="number" min="4" max="30" value="10">
+          </label>
+          <div class="muted small">Disable for competitive play.</div>
+        </div>
+        <div class="panel">
           <h3>Quality of Life</h3>
           <label><input id="ruleScreenShake" type="checkbox" checked> Screen Shake on KO</label>
           <label><input id="ruleHitSparks" type="checkbox" checked> Hit Sparks</label>
+          <label><input id="ruleHitboxViewer" type="checkbox"> Hitbox Viewer</label>
         </div>
       </div>
       <div class="row space mt">
@@ -225,6 +242,9 @@
         </div>
         <div class="small mt4">
           <b>P2</b> Arrows/0 jump/fastfall, 1 attack, 2 special, 3 shield, . pick/drop, <b>9 FS</b>.
+        </div>
+        <div class="small mt4">
+          Tag Team: <b>P1</b> Y = Tag, T = Assist • <b>P2</b> 7 = Tag, 6 = Assist
         </div>
         <div class="pill mt">Enter: Pause</div>
         <div class="muted small mt4">Training: press I to open the Spawn Item menu.</div>
