@@ -207,6 +207,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('keydown', any);
   window.addEventListener('mousedown', any);
   window.addEventListener('touchstart', any, { passive: true });
+
+  // NEW: Ensure overlays are hidden on first load
+  document.getElementById('pause')?.classList.add('hidden');
+  document.getElementById('results')?.classList.add('hidden');
 });
 
 
@@ -535,11 +539,18 @@ function opponentOf(f){ return f===p1? p2 : p1; }
 
 function startBattle(){
   Screens.show('#gameScreen'); ensureAudio(); startMusic();
+
+  // NEW: force-hide overlays and reset state/inputs
+  paused = false;
+  document.getElementById('pause')?.classList.add('hidden');
+  document.getElementById('results')?.classList.add('hidden');
+  Object.keys(keys).forEach(k => { keys[k] = false; });
+
   if(!App.stage) App.stage = STAGES[0];
   const {p1Id,p2Id}=buildSpritesForSelection();
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
-  running=true; paused=false; items.length=0; projectiles.length=0; helpers.length=0; itemTimer=0; last=0;
+  running=true; items.length=0; projectiles.length=0; helpers.length=0; sparks.length=0; itemTimer=0; last=0;
   timer = App.rules.time>0? App.rules.time*60 : 0;
   updateHUD(); requestAnimationFrame(loop);
 }
@@ -557,7 +568,14 @@ function updateHUD(){
 function renderStocks(f){ if(App.mode==='training') return '<div class="stock"></div>'; let s=''; for(let i=0;i<(f?f.stocks:0);i++) s+='<div class="stock"></div>'; return s; }
 function formatTime(sec){ const m=Math.floor(sec/60); const s=Math.floor(sec%60).toString().padStart(2,'0'); return `${m}:${s}`; }
 
-function loop(ts){ if(!running) return; if(!last) last=ts; const dt=Math.min(.033,(ts-last)/1000); last=ts; if(!paused){ frame(dt); } requestAnimationFrame(loop); }
+function loop(ts){
+  // NEW: if overlays are visible, keep game paused
+  const pauseOpen   = !document.getElementById('pause')?.classList.contains('hidden');
+  const resultsOpen = !document.getElementById('results')?.classList.contains('hidden');
+  if (pauseOpen || resultsOpen) { paused = true; }
+
+  if(!running) return; if(!last) last=ts; const dt=Math.min(.033,(ts-last)/1000); last=ts; if(!paused){ frame(dt); } requestAnimationFrame(loop);
+}
 
 function frame(dt){
   updateControls();
