@@ -1,6 +1,6 @@
 // Smashlike — FS + extended animation rows (runtime sprites)
 const $=(q)=>document.querySelector(q); const $$=(q)=>[...document.querySelectorAll(q)];
-const Screens={ show(id){ $('.screen').forEach(s=>s.classList.add('hidden')); $(id).classList.remove('hidden'); }};
+const Screens={ show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); const tgt = document.querySelector(id); if (tgt) tgt.classList.remove('hidden'); }};
 
 // === ONLINE (client) ===
 const Online = {
