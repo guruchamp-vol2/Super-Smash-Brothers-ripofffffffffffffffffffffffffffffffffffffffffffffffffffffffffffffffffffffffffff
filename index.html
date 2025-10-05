@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smashlike Ultimate — Open Prototype</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- TITLE -->
+  <section id="title" class="screen center">
+    <div class="stack center">
+      <h1 class="logo">SMASHLIKE <span>ULTIMATE</span></h1>
+      <p class="muted">A teaching-focused, open prototype inspired by arena platform fighters.</p>
+      <button id="btnStart" class="primary xl">PRESS ANY BUTTON</button>
+      <div class="tips muted">Keyboard only. No assets/downloads required.</div>
+    </div>
+  </section>
+
+  <!-- MAIN MENU -->
+  <section id="main" class="screen center hidden">
+    <div class="grid main-grid">
+      <div class="card grid">
+        <button id="gotoSmash" class="menu red">Smash</button>
+        <div class="row two">
+          <button id="gotoModes" class="menu blue">Games &amp; More</button>
+          <button id="gotoVault" class="menu pink">Vault</button>
+        </div>
+      </div>
+      <div class="grid">
+        <button id="gotoOnline" class="menu gold">Online (Local)</button>
+        <button id="gotoTrainingShortcut" class="menu green">Training</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODE SELECT -->
+  <section id="modes" class="screen center hidden">
+    <div class="card w900">
+      <div class="row space">
+        <h2>Choose Mode</h2>
+        <div id="modeBadge" class="pill">—</div>
+      </div>
+      <div class="row wrap gap">
+        <button class="mode-btn red" data-mode="stock">Stock Battle</button>
+        <button class="mode-btn green" data-mode="training">Training</button>
+        <button class="mode-btn blue" data-mode="timed">Timed (KOs - Falls)</button>
+      </div>
+      <div class="sub muted">Tip: Use the Rules to customize stocks, items, CPU level, and more.</div>
+      <div class="row space mt">
+        <button class="ghost" id="backMain1">Back</button>
+        <button class="primary" id="configureRules">Rules</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RULES -->
+  <section id="rules" class="screen center hidden">
+    <div class="card w900">
+      <h2>Rules</h2>
+      <div class="grid two-col gap">
+        <div class="panel">
+          <h3>Win Conditions</h3>
+          <label>Stocks
+            <input id="ruleStocks" type="number" min="1" max="10" value="3">
+          </label>
+          <label>Time Limit (min, 0 = none)
+            <input id="ruleTime" type="number" min="0" max="30" value="0">
+          </label>
+          <label>Damage Ratio (0.5–2.0)
+            <input id="ruleRatio" type="number" min="0.5" step="0.1" max="2.0" value="1.0">
+          </label>
+        </div>
+        <div class="panel">
+          <h3>Items</h3>
+          <label><input id="ruleItemsOn" type="checkbox" checked> Enable Items</label>
+          <label>Item Frequency (secs)
+            <input id="ruleItemFreq" type="number" min="2" max="20" value="8">
+          </label>
+          <div class="muted">Use Training to spawn items manually.</div>
+        </div>
+        <div class="panel">
+          <h3>CPU</h3>
+          <label>CPU Level (0: Human)
+            <input id="ruleCpuLevel" type="number" min="0" max="9" value="3">
+          </label>
+        </div>
+        <div class="panel">
+          <h3>Quality of Life</h3>
+          <label><input id="ruleScreenShake" type="checkbox" checked> Screen Shake on KO</label>
+          <label><input id="ruleHitSparks" type="checkbox" checked> Hit Sparks</label>
+        </div>
+      </div>
+      <div class="row space mt">
+        <button class="ghost" id="backModes">Back</button>
+        <button class="primary" id="rulesConfirm">Done</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHARACTER SELECT -->
+  <section id="chars" class="screen center hidden">
+    <div class="card w1100">
+      <div class="row space">
+        <h2>Select Fighters</h2>
+        <div class="pill" id="modeLabel">—</div>
+      </div>
+      <div class="grid two-col gap">
+        <div>
+          <div class="muted">Player 1</div>
+          <div id="p1Chars" class="grid auto"></div>
+          <div id="p1Alts" class="row wrap gap mt"></div>
+        </div>
+        <div>
+          <div class="muted">Player 2</div>
+          <div id="p2Chars" class="grid auto"></div>
+          <div id="p2Alts" class="row wrap gap mt"></div>
+        </div>
+      </div>
+      <div class="row space mt">
+        <div class="row gap">
+          <button class="ghost" id="charsBack">Back</button>
+        </div>
+        <div class="row gap">
+          <button class="ghost" id="openMusic">Music</button>
+          <button class="ghost" id="openStage">Stage</button>
+          <button id="charsReady" class="primary">Ready!</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STAGE SELECT -->
+  <section id="stages" class="screen center hidden">
+    <div class="card w900">
+      <h2>Choose Stage</h2>
+      <div id="stageGrid" class="grid auto"></div>
+      <div class="row space mt">
+        <button class="ghost" id="stagesBack">Back</button>
+        <button class="primary" id="stagesConfirm">Confirm</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MUSIC SELECT -->
+  <section id="music" class="screen center hidden">
+    <div class="card w900">
+      <h2>Music</h2>
+      <p class="muted">Procedural tracks via WebAudio.</p>
+      <div id="musicGrid" class="grid auto"></div>
+      <div class="row space mt">
+        <button class="ghost" id="musicBack">Back</button>
+        <button class="primary" id="musicConfirm">Use Track</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="gameScreen" class="screen column center hidden">
+    <div class="row gap">
+      <canvas id="game" width="1100" height="620"></canvas>
+      <div class="card side">
+        <h3>Controls</h3>
+        <div class="small">
+          <b>P1</b> WASD move/jump/fastfall, J attack, K special, L shield, H pick/drop, U use item.
+        </div>
+        <div class="small mt4">
+          <b>P2</b> Arrows/0 jump/fastfall, 1 attack, 2 special, 3 shield, . pick/drop.
+        </div>
+        <div class="pill mt">Enter: Pause</div>
+        <div class="muted small mt4">Training: press I to open the Spawn Item menu.</div>
+      </div>
+    </div>
+    <div id="hud" class="hud">
+      <div class="top">
+        <div id="hudP1" class="hudcol left"></div>
+        <div id="hudTimer" class="pill">—</div>
+        <div id="hudP2" class="hudcol right"></div>
+      </div>
+      <div id="pause" class="pause hidden">
+        <div class="panel">
+          <h3>Paused</h3>
+          <div class="stack gap">
+            <button id="resume">Resume</button>
+            <button id="spawnItem" class="ghost">Spawn Item (Training)</button>
+            <button id="endBattle" class="ghost">End Battle</button>
+          </div>
+        </div>
+      </div>
+      <div id="results" class="pause hidden">
+        <div class="panel">
+          <h2 id="resultTitle">Game!</h2>
+          <div id="resultStats" class="grid two-col gap mt"></div>
+          <div class="row space mt">
+            <button id="again" class="primary">Runback</button>
+            <button id="toSelect" class="ghost">Character Select</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

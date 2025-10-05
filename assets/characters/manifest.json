@@ -1,0 +1,350 @@
+{
+  "cyber_ninja": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Cyber Ninja"
+  },
+  "void_mage": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Void Mage"
+  },
+  "steel_brawler": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Steel Brawler"
+  },
+  "gunner_alpha": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Gunner Alpha"
+  },
+  "vamp_slayer": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Vampire Slayer"
+  },
+  "battle_monk": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Battle Monk"
+  },
+  "mech_pilot": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Mech Pilot"
+  },
+  "arc_runner": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Arc Runner"
+  },
+  "specter": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Specter"
+  },
+  "wasteland": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Wasteland Ranger"
+  },
+  "chef_duelist": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Chef Duelist"
+  },
+  "storm_blade": {
+    "frameSize": [
+      16,
+      16
+    ],
+    "anims": {
+      "idle": {
+        "row": 0,
+        "frames": 8,
+        "fps": 12
+      },
+      "walk": {
+        "row": 1,
+        "frames": 10,
+        "fps": 12
+      },
+      "attack": {
+        "row": 2,
+        "frames": 10,
+        "fps": 16
+      },
+      "special": {
+        "row": 3,
+        "frames": 10,
+        "fps": 16
+      }
+    },
+    "name": "Storm Blade"
+  }
+}
