@@ -10,9 +10,13 @@ const App = {
   stage: null,
   track: null,
 };
-// prevent immediate pause when entering battle (e.g., pressing Enter on Ready)
-let suppressPauseUntil = 0;
 
+// --- NEW: robust input locks to stop Ready -> instant pause ---
+let pauseLockUntil = 0;          // absolute timestamp until which pause is ignored
+let canTogglePause = true;       // edge trigger for Enter
+function lockPause(ms=1200){ pauseLockUntil = performance.now() + ms; }
+
+// Characters, stages, music (unchanged)
 const CHARACTERS = [
   { id:'bruiser', name:'Bruiser', kit:'heavy', stats:{weight:1.1, speed:1.0},
     alts:[
@@ -78,53 +82,17 @@ const ANIMS=[
 ];
 const FW=16,FH=16;
 
-function pose_idle(t){ const by=9+Math.sin(t*2*Math.PI)*0.35; return {
-  torso:[8,by+1,8,by+5], head:[8,by-2+0.2*Math.sin(t*4*Math.PI)],
-  l_arm:[8,by+2,6-1.0*Math.sin(t*2*Math.PI),by+4],
-  r_arm:[8,by+2,10+1.0*Math.sin(t*2*Math.PI),by+4],
-  l_leg:[8,by+5,7-0.5*Math.sin(t*2*Math.PI),by+8],
-  r_leg:[8,by+5,9+0.5*Math.sin(t*2*Math.PI),by+8],
-};}
-function pose_walk(t){ const by=9,s=Math.sin(t*2*Math.PI); return {
-  torso:[8,by+1+0.2*Math.sin(t*4*Math.PI),8,by+5], head:[8,by-2+0.3*Math.sin(t*4*Math.PI)],
-  l_arm:[8,by+2,6-2.0*s,by+4], r_arm:[8,by+2,10+2.0*s,by+4],
-  l_leg:[8,by+5,7-1.7*s,by+8.2], r_leg:[8,by+5,9+1.7*s,by+8.2],
-};}
-function pose_run(t){ const by=8,s=Math.sin(t*2*Math.PI); return {
-  torso:[8,by+1,8,by+5], head:[8,by-2+0.6*Math.sin(t*4*Math.PI)],
-  l_arm:[8,by+2,6-3.2*s,by+4], r_arm:[8,by+2,10+3.2*s,by+4],
-  l_leg:[8,by+5,7-3.0*s,by+8.2], r_leg:[8,by+5,9+3.0*s,by+8.2],
-};}
-function pose_jump(t){ const by=9-2.0*Math.sin(Math.PI*t); return {
-  torso:[8,by,8,by+4], head:[8,by-3],
-  l_arm:[8,by+2,6.5,by+3.5], r_arm:[8,by+2,9.5,by+3.5],
-  l_leg:[8,by+5,7.5,by+7.8], r_leg:[8,by+5,8.5,by+7.8],
-};}
-function pose_aerial(t){ const by=7+Math.sin(t*2*Math.PI)*0.2; return {
-  torso:[8,by+1,8,by+5], head:[8,by-2],
-  l_arm:[8,by+2,6.5,by+3.5], r_arm:[8,by+2,9.5,by+3.5],
-  l_leg:[8,by+5,7.2,by+7.6], r_leg:[8,by+5,8.8,by+7.6],
-};}
-function pose_attack(t){ const by=9,swing=Math.sin(Math.min(1.0,t)*Math.PI); const ang=-0.9+2.4*swing;
-  const rx=8+Math.cos(ang)*3.6, ry=by+2+Math.sin(ang)*3.6; const la=0.4-0.5*swing, lx=8+Math.cos(la)*2.7, ly=by+2+Math.sin(la)*2.7;
-  return { torso:[8,by+1,8,by+5], head:[8,by-2], r_arm:[8,by+2,rx,ry], l_arm:[8,by+2,lx,ly], l_leg:[8,by+5,7,by+8.5], r_leg:[8,by+5,9,by+8.5] };
-}
-function pose_special(t){ const by=9,charge=Math.min(1.0,t/0.6),ang=2.3-1.4*charge;
-  const rx=8+Math.cos(ang)*2.8, ry=by+2+Math.sin(ang)*2.8; const lx=8-Math.cos(ang)*2.8, ly=by+2+Math.sin(ang)*2.8; const crouch=0.6*(1.0 - Math.cos(Math.min(1.0,t)*Math.PI));
-  return { torso:[8,by+1,8,by+5], head:[8,by-2], r_arm:[8,by+2,rx,ry], l_arm:[8,by+2,lx,ly], l_leg:[8,by+5,7,by+8.4+crouch*0.5], r_leg:[8,by+5,9,by+8.4+crouch*0.5] };
-}
-function pose_hitstun(t){ const by=9+Math.sin(t*6*Math.PI)*0.6; return {
-  torso:[8,by+1,8,by+5], head:[8,by-1.5], l_arm:[8,by+2,7.0,by+4], r_arm:[8,by+2,9.0,by+4], l_leg:[8,by+5,7.2,by+8.5], r_leg:[8,by+5,8.8,by+8.5],
-};}
-function pose_ko(t){ const by=9; const ang = t*4*Math.PI; const rx=8+Math.cos(ang)*2.6, ry=by+1+Math.sin(ang)*2.6;
-  return { torso:[8,by+1,8,by+5], head:[8,by-2], r_arm:[8,by+2,rx,ry], l_arm:[8,by+2,16-rx,ry], l_leg:[8,by+5,7,by+8.8], r_leg:[8,by+5,9,by+8.8] };
-}
-function pose_fs(t){ const by=8-0.8*Math.sin(t*2*Math.PI); const ang = -1.2 + 2.4*t;
-  return { torso:[8,by+1,8,by+5], head:[8,by-2-0.5*Math.sin(t*4*Math.PI)],
-    r_arm:[8,by+2,8+Math.cos(ang)*3.8,by-0.2+Math.sin(ang)*3.8],
-    l_arm:[8,by+2,8-Math.cos(ang)*3.8,by-0.2+Math.sin(ang)*3.8],
-    l_leg:[8,by+5,7,by+8.2], r_leg:[8,by+5,9,by+8.2] };
-}
+// poses (unchanged) …
+function pose_idle(t){ const by=9+Math.sin(t*2*Math.PI)*0.35; return { torso:[8,by+1,8,by+5], head:[8,by-2+0.2*Math.sin(t*4*Math.PI)], l_arm:[8,by+2,6-1.0*Math.sin(t*2*Math.PI),by+4], r_arm:[8,by+2,10+1.0*Math.sin(t*2*Math.PI),by+4], l_leg:[8,by+5,7-0.5*Math.sin(t*2*Math.PI),by+8], r_leg:[8,by+5,9+0.5*Math.sin(t*2*Math.PI),by+8],};}
+function pose_walk(t){ const by=9,s=Math.sin(t*2*Math.PI); return { torso:[8,by+1+0.2*Math.sin(t*4*Math.PI),8,by+5], head:[8,by-2+0.3*Math.sin(t*4*Math.PI)], l_arm:[8,by+2,6-2.0*s,by+4], r_arm:[8,by+2,10+2.0*s,by+4], l_leg:[8,by+5,7-1.7*s,by+8.2], r_leg:[8,by+5,9+1.7*s,by+8.2],};}
+function pose_run(t){ const by=8,s=Math.sin(t*2*Math.PI); return { torso:[8,by+1,8,by+5], head:[8,by-2+0.6*Math.sin(t*4*Math.PI)], l_arm:[8,by+2,6-3.2*s,by+4], r_arm:[8,by+2,10+3.2*s,by+4], l_leg:[8,by+5,7-3.0*s,by+8.2], r_leg:[8,by+5,9+3.0*s,by+8.2],};}
+function pose_jump(t){ const by=9-2.0*Math.sin(Math.PI*t); return { torso:[8,by,8,by+4], head:[8,by-3], l_arm:[8,by+2,6.5,by+3.5], r_arm:[8,by+2,9.5,by+3.5], l_leg:[8,by+5,7.5,by+7.8], r_leg:[8,by+5,8.5,by+7.8],};}
+function pose_aerial(t){ const by=7+Math.sin(t*2*Math.PI)*0.2; return { torso:[8,by+1,8,by+5], head:[8,by-2], l_arm:[8,by+2,6.5,by+3.5], r_arm:[8,by+2,9.5,by+3.5], l_leg:[8,by+5,7.2,by+7.6], r_leg:[8,by+5,8.8,by+7.6],};}
+function pose_attack(t){ const by=9,swing=Math.sin(Math.min(1.0,t)*Math.PI); const ang=-0.9+2.4*swing; const rx=8+Math.cos(ang)*3.6, ry=by+2+Math.sin(ang)*3.6; const la=0.4-0.5*swing, lx=8+Math.cos(la)*2.7, ly=by+2+Math.sin(la)*2.7; return { torso:[8,by+1,8,by+5], head:[8,by-2], r_arm:[8,by+2,rx,ry], l_arm:[8,by+2,lx,ly], l_leg:[8,by+5,7,by+8.5], r_leg:[8,by+5,9,by+8.5] };}
+function pose_special(t){ const by=9,charge=Math.min(1.0,t/0.6),ang=2.3-1.4*charge; const rx=8+Math.cos(ang)*2.8, ry=by+2+Math.sin(ang)*2.8; const lx=8-Math.cos(ang)*2.8, ly=by+2+Math.sin(ang)*2.8; const crouch=0.6*(1.0 - Math.cos(Math.min(1.0,t)*Math.PI)); return { torso:[8,by+1,8,by+5], head:[8,by-2], r_arm:[8,by+2,rx,ry], l_arm:[8,by+2,lx,ly], l_leg:[8,by+5,7,by+8.4+crouch*0.5], r_leg:[8,by+5,9,by+8.4+crouch*0.5] };}
+function pose_hitstun(t){ const by=9+Math.sin(t*6*Math.PI)*0.6; return { torso:[8,by+1,8,by+5], head:[8,by-1.5], l_arm:[8,by+2,7.0,by+4], r_arm:[8,by+2,9.0,by+4], l_leg:[8,by+5,7.2,by+8.5], r_leg:[8,by+5,8.8,by+8.5],};}
+function pose_ko(t){ const by=9; const ang = t*4*Math.PI; const rx=8+Math.cos(ang)*2.6, ry=by+1+Math.sin(ang)*2.6; return { torso:[8,by+1,8,by+5], head:[8,by-2], r_arm:[8,by+2,rx,ry], l_arm:[8,by+2,16-rx,ry], l_leg:[8,by+5,7,by+8.8], r_leg:[8,by+5,9,by+8.8] }; }
+function pose_fs(t){ const by=8-0.8*Math.sin(t*2*Math.PI); const ang = -1.2 + 2.4*t; return { torso:[8,by+1,8,by+5], head:[8,by-2-0.5*Math.sin(t*4*Math.PI)], r_arm:[8,by+2,8+Math.cos(ang)*3.8,by-0.2+Math.sin(ang)*3.8], l_arm:[8,by+2,8-Math.cos(ang)*3.8,by-0.2+Math.sin(ang)*3.8], l_leg:[8,by+5,7,by+8.2], r_leg:[8,by+5,9,by+8.2] }; }
 
 const POSES={idle:pose_idle, walk:pose_walk, run:pose_run, jump:pose_jump, aerial:pose_aerial, attack:pose_attack, special:pose_special, hitstun:pose_hitstun, ko:pose_ko, fs:pose_fs};
 
@@ -148,22 +116,11 @@ function makeSheetFromColors(colors){
   ANIMS.forEach(([name,frames,fps],r)=>{
     meta.anims[name]={row:r,frames,fps};
     for(let i=0;i<frames;i++){
-      const t=i/frames;
-      const pose=POSES[name](t);
-      g.save();
-      g.translate(i*FW,r*FH);
-
-      // Flicker in hitstun
-      if(name==='hitstun'){
-        g.globalAlpha = 0.75 + 0.25*Math.sin((i/frames)*4*Math.PI);
-      }
-
+      const t=i/frames; const pose=POSES[name](t);
+      g.save(); g.translate(i*FW,r*FH);
+      if(name==='hitstun'){ g.globalAlpha = 0.75 + 0.25*Math.sin((i/frames)*4*Math.PI); }
       drawFigure(g,pal,pose);
-
-      if(['attack','special','fs'].includes(name)){
-        g.fillStyle=`rgba(${pal[2][0]},${pal[2][1]},${pal[2][2]},${1-i/frames})`;
-        g.fillRect(12,7,3,2);
-      }
+      if(['attack','special','fs'].includes(name)){ g.fillStyle=`rgba(${pal[2][0]},${pal[2][1]},${pal[2][2]},${1-i/frames})`; g.fillRect(12,7,3,2); }
       g.restore();
     }
   });
@@ -173,56 +130,37 @@ function buildSpritesForSelection(){
   const p1Sel=(App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0].colors;
   const p2Sel=(App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0].colors;
   const p1Id=(App.p1.char||CHARACTERS[0]).id+'_p1'; const p2Id=(App.p2.char||CHARACTERS[1]).id+'_p2';
-  [[p1Id,p1Sel,(App.p1.char||CHARACTERS[0]).name],[p2Id,p2Sel,(App.p2.char||CHARACTERS[1]).name]].forEach(([id,colors,name])=>{
-    const {sheet,meta}=makeSheetFromColors(colors); SPRITES[id]=sheet; MANIFEST[id]={...meta,name};
+  [[p1Id,p1Sel,(App.p1.char||CHARACTERS[0]).name],[p2Id,p2Sel,(App.p2.char||CHARACTERS[1]).name]].forEach(([id,colors])=>{
+    const {sheet,meta}=makeSheetFromColors(colors); SPRITES[id]=sheet; MANIFEST[id]={...meta};
   });
   return {p1Id,p2Id};
 }
 
 // UI bindings
-// Title → Main: accept button, any key, mouse, or touch
 document.addEventListener('DOMContentLoaded', () => {
   const title   = document.getElementById('title');
   const startBtn= document.getElementById('btnStart');
-  if (!title || !startBtn) return; // defensive guard
-
-  const go = () => {
-    // Only act if we're still on the title screen
-    if (!title.classList.contains('hidden')) {
-      Screens.show('#main');
-    }
-  };
-
-  // Click on the start button
+  if (!title || !startBtn) return;
+  const go = () => { if (!title.classList.contains('hidden')) Screens.show('#main'); };
   startBtn.addEventListener('click', go);
-
-  // Any user input should also start
-  const any = () => {
-    go();
-    // Remove after first activation to prevent double triggers
-    window.removeEventListener('keydown', any);
-    window.removeEventListener('mousedown', any);
-    window.removeEventListener('touchstart', any);
-  };
-
+  const any = () => { go(); window.removeEventListener('keydown', any); window.removeEventListener('mousedown', any); window.removeEventListener('touchstart', any); };
   window.addEventListener('keydown', any);
   window.addEventListener('mousedown', any);
   window.addEventListener('touchstart', any, { passive: true });
 });
 
-var el;
-
+let el;
 el = $('#gotoSmash');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
-el = $('#gotoTrainingShortcut');    if (el) el.addEventListener('click', ()=> { App.mode='training'; var mb=$('#modeBadge'); if(mb) mb.textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
+el = $('#gotoTrainingShortcut');    if (el) el.addEventListener('click', ()=> { App.mode='training'; $('#modeBadge')&&($('#modeBadge').textContent='Training'); buildCharacterSelect(); Screens.show('#chars'); });
 el = $('#backMain1');               if (el) el.addEventListener('click', ()=> Screens.show('#main'));
 el = $('#gotoModes');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
 el = $('#configureRules');          if (el) el.addEventListener('click', ()=> Screens.show('#rules'));
 el = $('#backModes');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
 el = $('#rulesConfirm');            if (el) el.addEventListener('click', ()=> { readRules(); Screens.show('#modes'); });
 
-el = document.querySelector('.mode-btn.red');   if (el) el.addEventListener('click', ()=>{ App.mode='stock';  var mb=$('#modeBadge'); if(mb) mb.textContent='Stock';    buildCharacterSelect(); Screens.show('#chars'); });
-el = document.querySelector('.mode-btn.green'); if (el) el.addEventListener('click', ()=>{ App.mode='training';var mb=$('#modeBadge'); if(mb) mb.textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
-el = document.querySelector('.mode-btn.blue');  if (el) el.addEventListener('click', ()=>{ App.mode='timed';   var mb=$('#modeBadge'); if(mb) mb.textContent='Timed';    buildCharacterSelect(); Screens.show('#chars'); });
+el = document.querySelector('.mode-btn.red');   if (el) el.addEventListener('click', ()=>{ App.mode='stock';  $('#modeBadge')&&($('#modeBadge').textContent='Stock');    buildCharacterSelect(); Screens.show('#chars'); });
+el = document.querySelector('.mode-btn.green'); if (el) el.addEventListener('click', ()=>{ App.mode='training';$('#modeBadge')&&($('#modeBadge').textContent='Training'); buildCharacterSelect(); Screens.show('#chars'); });
+el = document.querySelector('.mode-btn.blue');  if (el) el.addEventListener('click', ()=>{ App.mode='timed';   $('#modeBadge')&&($('#modeBadge').textContent='Timed');    buildCharacterSelect(); Screens.show('#chars'); });
 
 el = $('#charsBack');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
 el = $('#openStage');               if (el) el.addEventListener('click', ()=> { buildStages(); Screens.show('#stages'); });
@@ -231,10 +169,17 @@ el = $('#stagesConfirm');           if (el) el.addEventListener('click', ()=> Sc
 el = $('#openMusic');               if (el) el.addEventListener('click', ()=> { buildMusic(); Screens.show('#music'); });
 el = $('#musicBack');               if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
 el = $('#musicConfirm');            if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
-el = $('#charsReady');              if (el) el.addEventListener('click', ()=> startBattle());
+
+// --- Ready: startBattle with strong input lock/blur ---
+el = $('#charsReady');
+if (el) el.addEventListener('click', (e)=>{
+  e.preventDefault();
+  document.activeElement && document.activeElement.blur(); // stop Enter re-firing
+  startBattle();
+});
 
 function readRules(){
-  var el;
+  let el;
   el = document.getElementById('ruleStocks');     App.rules.stocks   = el ? +el.value : 3;
   el = document.getElementById('ruleTime');       App.rules.time     = el ? +el.value : 0;
   el = document.getElementById('ruleRatio');      App.rules.ratio    = el ? +el.value : 1.0;
@@ -247,7 +192,7 @@ function readRules(){
 
 function buildCharacterSelect(){
   const modeMap={stock:'Stock Battle',training:'Training',timed:'Timed'};
-  if($('#modeLabel')) $('#modeLabel').textContent = modeMap[App.mode];
+  $('#modeLabel') && ($('#modeLabel').textContent = modeMap[App.mode]);
   const buildGrid = (sideId, altRowId, side) => {
     const grid = $(sideId); if(!grid) return; grid.innerHTML = '';
     CHARACTERS.forEach((c)=>{
@@ -282,73 +227,24 @@ function buildStages(){
   if(!App.stage) App.stage = STAGES[0];
 }
 function buildMusic(){
-  var grid = document.getElementById('musicGrid');
-  if (!grid) return;
+  const grid = document.getElementById('musicGrid'); if (!grid) return;
   grid.innerHTML = '';
-
-  MUSIC.forEach(function(t){
-    var el = document.createElement('div');
-    el.className = 'item';
-    el.textContent = t.name;
-    el.onclick = function(){
-      App.track = t;
-      startMusic();
-      Array.prototype.forEach.call(document.querySelectorAll('#musicGrid .item'), function(i){ i.style.outline=''; });
-      el.style.outline = '3px solid var(--accent)';
-    };
+  MUSIC.forEach((t)=>{
+    const el=document.createElement('div'); el.className='item'; el.textContent=t.name;
+    el.onclick=()=>{ App.track=t; startMusic(); $$('#musicGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
     grid.appendChild(el);
   });
-
-  if (!App.track) {
-    App.track = MUSIC[0];
-    startMusic();
-  }
+  if (!App.track) { App.track = MUSIC[0]; startMusic(); }
 }
-
 
 // Audio
 let audioCtx=null, currentNodes=[];
-
 function ensureAudio(){ if(!audioCtx){ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); } }
 function stopMusic(){ currentNodes.forEach(n=>{try{n.stop? n.stop(): n.disconnect()}catch{} }); currentNodes=[]; }
 function startMusic(){ ensureAudio(); stopMusic(); if(App.track) currentNodes = App.track.generator(audioCtx) || []; }
-function melody(ctx, chord, lengths){
-  const now = ctx.currentTime+0.05; let t=now; const nodes=[]; const tempo=120; const spb=60/tempo;
-  const master = ctx.createGain(); master.gain.value=.15; master.connect(ctx.destination);
-  for(let bar=0;bar<120;bar++){
-    for(let i=0;i<lengths.length;i++){
-      const osc=ctx.createOscillator(); const gain=ctx.createGain();
-      const note = 220*Math.pow(2,(chord[i%chord.length]+12*(bar%2))/12);
-      osc.type='sawtooth'; osc.frequency.value=note; gain.gain.setValueAtTime(0.0001,t); gain.gain.exponentialRampToValueAtTime(.4,t+.01); gain.gain.exponentialRampToValueAtTime(.001,t+lengths[i]*spb);
-      osc.connect(gain); gain.connect(master); osc.start(t); osc.stop(t+lengths[i]*spb+.02); nodes.push(osc);
-      t+=lengths[i]*spb;
-    }
-  }
-  return nodes;
-}
-function bassRun(ctx, steps){
-  const master=ctx.createGain(); master.gain.value=.18; master.connect(ctx.destination);
-  const tempo=128, spb=60/tempo; let t=ctx.currentTime+0.05; const nodes=[];
-  for(let i=0;i<600;i++){
-    const osc=ctx.createOscillator(); const gain=ctx.createGain();
-    osc.type='square'; const f=110*Math.pow(2,(steps[i%steps.length]-12*(i%4==0?0:1))/12); osc.frequency.value=f;
-    gain.gain.setValueAtTime(.0001,t); gain.gain.exponentialRampToValueAtTime(.35,t+.02); gain.gain.exponentialRampToValueAtTime(.001,t+spb*.9);
-    osc.connect(gain); gain.connect(master); osc.start(t); osc.stop(t+spb);
-    nodes.push(osc); t+=spb;
-  }
-  return nodes;
-}
-function plucks(ctx, steps){
-  const master=ctx.createGain(); master.gain.value=.14; master.connect(ctx.destination);
-  const tempo=96, spb=60/tempo; let t=ctx.currentTime+0.05; const nodes=[];
-  for(let i=0;i<600;i++){
-    const osc=ctx.createOscillator(); const gain=ctx.createGain();
-    osc.type='triangle'; const f=330*Math.pow(2,(steps[i%steps.length]+(i%8<4?0:12))/12); osc.frequency.value=f;
-    gain.gain.setValueAtTime(.0001,t); gain.gain.exponentialRampToValueAtTime(.3,t+.01); gain.gain.exponentialRampToValueAtTime(.001,t+spb*1.2);
-    osc.connect(gain); gain.connect(master); osc.start(t); osc.stop(t+spb*1.3); nodes.push(osc); t+=spb/2;
-  }
-  return nodes;
-}
+function melody(ctx, chord, lengths){ const now = ctx.currentTime+0.05; let t=now; const nodes=[]; const tempo=120; const spb=60/tempo; const master = ctx.createGain(); master.gain.value=.15; master.connect(ctx.destination); for(let bar=0;bar<120;bar++){ for(let i=0;i<lengths.length;i++){ const osc=ctx.createOscillator(); const gain=ctx.createGain(); const note = 220*Math.pow(2,(chord[i%chord.length]+12*(bar%2))/12); osc.type='sawtooth'; osc.frequency.value=note; gain.gain.setValueAtTime(0.0001,t); gain.gain.exponentialRampToValueAtTime(.4,t+.01); gain.gain.exponentialRampToValueAtTime(.001,t+lengths[i]*spb); osc.connect(gain); gain.connect(master); osc.start(t); osc.stop(t+lengths[i]*spb+.02); nodes.push(osc); t+=lengths[i]*spb; } } return nodes; }
+function bassRun(ctx, steps){ const master=ctx.createGain(); master.gain.value=.18; master.connect(ctx.destination); const tempo=128, spb=60/tempo; let t=ctx.currentTime+0.05; const nodes=[]; for(let i=0;i<600;i++){ const osc=ctx.createOscillator(); const gain=ctx.createGain(); osc.type='square'; const f=110*Math.pow(2,(steps[i%steps.length]-12*(i%4==0?0:1))/12); osc.frequency.value=f; gain.gain.setValueAtTime(.0001,t); gain.gain.exponentialRampToValueAtTime(.35,t+.02); gain.gain.exponentialRampToValueAtTime(.001,t+spb*.9); osc.connect(gain); gain.connect(master); osc.start(t); osc.stop(t+spb); nodes.push(osc); t+=spb; } return nodes; }
+function plucks(ctx, steps){ const master=ctx.createGain(); master.gain.value=.14; master.connect(ctx.destination); const tempo=96, spb=60/tempo; let t=ctx.currentTime+0.05; const nodes=[]; for(let i=0;i<600;i++){ const osc=ctx.createOscillator(); const gain=ctx.createGain(); osc.type='triangle'; const f=330*Math.pow(2,(steps[i%steps.length]+(i%8<4?0:12))/12); osc.frequency.value=f; gain.gain.setValueAtTime(.0001,t); gain.gain.exponentialRampToValueAtTime(.3,t+.01); gain.gain.exponentialRampToValueAtTime(.001,t+spb*1.2); osc.connect(gain); gain.connect(master); osc.start(t); osc.stop(t+spb*1.3); nodes.push(osc); t+=spb/2; } return nodes; }
 
 // Engine + FS
 const G=1800, FRICTION=0.82, AIR_FRICTION=0.91, JUMP_V=620, MAX_FALL=900;
@@ -522,7 +418,7 @@ function spawnRandomItem(){ const roll=Math.random(); if(roll<.34) items.push(ne
 const keys={};
 function clearKeys(){ for(const k of Object.keys(keys)) delete keys[k]; }
 window.addEventListener('keydown',e=>{ keys[e.key]=true; });
-window.addEventListener('keyup',e=>{ keys[e.key]=false; });
+window.addEventListener('keyup',e=>{ keys[e.key]=false; if(e.key==='Enter') canTogglePause=true; }); // allow next toggle on keyup
 const controlsP1={left:false,right:false,attack:false,special:false,jump:false,fastfall:false,shield:false,pick:false,use:false,fs:false};
 const controlsP2={left:false,right:false,attack:false,special:false,jump:false,fastfall:false,shield:false,pick:false,use:false,fs:false};
 function resetControls(c){ Object.keys(c).forEach(k=> c[k]=false); }
@@ -537,23 +433,21 @@ let p1,p2; let last=0; let running=false; let paused=false; let itemTimer=0; let
 function opponentOf(f){ return f===p1? p2 : p1; }
 
 function startBattle(){
-  // Hide/clear overlays first to avoid “Game!” showing at start
+  // hide overlays and lock pause for a moment
   $('#results')?.classList.add('hidden');
   $('#pause')?.classList.add('hidden');
-
-  // block pause/input toggles for ~800ms so Enter/Space can't fire on load
-  suppressPauseUntil = performance.now() + 800;
+  lockPause(1400);                  // <- strong lock window
+  keys['Enter']=false;              // clear sticky Enter
+  canTogglePause=false;             // require a keyup before first toggle
+  document.activeElement && document.activeElement.blur();
 
   Screens.show('#gameScreen'); ensureAudio(); startMusic();
   if(!App.stage) App.stage = STAGES[0];
 
-  // fresh sprites based on current alts
   const {p1Id,p2Id}=buildSpritesForSelection();
-
   p1 = new Fighter(0, App.p1.char||CHARACTERS[0], (App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0], p1Id);
   p2 = new Fighter(1, App.p2.char||CHARACTERS[1], (App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0], p2Id);
 
-  // reset state that could leak between matches
   running=true; paused=false; items.length=0; projectiles.length=0; helpers.length=0; itemTimer=0; last=0;
   p1.vx=p1.vy=p2.vx=p2.vy=0;
   clearKeys(); resetControls(controlsP1); resetControls(controlsP2);
@@ -582,7 +476,6 @@ function frame(dt){
   p1.update(dt,controlsP1); 
   p2.update(dt,controlsP2);
 
-  // process Final Strike & attack hitboxes
   updateHitboxes(dt, p1, p2);
 
   for(const pr of projectiles){ pr.update(dt); if(collide(pr,p1)&&pr.owner!==p1){ hit(pr.owner,p1,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true;} if(collide(pr,p2)&&pr.owner!==p2){ hit(pr.owner,p2,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true; }}
@@ -607,28 +500,23 @@ function frame(dt){
 
   if(App.mode!=='training' && (p1.dead||p2.dead)){ showResults(); running=false; }
 }
-function drawSparks(){
-  for(const s of sparks){ ctx.globalAlpha=Math.max(0,s.t/0.2); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(s.x,s.y,8*(s.t/0.2),0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
-}
+function drawSparks(){ for(const s of sparks){ ctx.globalAlpha=Math.max(0,s.t/0.2); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(s.x,s.y,8*(s.t/0.2),0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } }
 function collide(a,b){ return (a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y); }
 function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.splice(i,1); }
 
-// Pause / overlays
+// Pause / overlays — with lock + edge trigger
 window.addEventListener('keydown', function(e){
   const gs = document.getElementById('gameScreen');
-  if (!gs || gs.classList.contains('hidden')) return; // ignore when not in-game
-
-  // NEW: don't react to keys during the short input-lock window
-  if (performance.now() < suppressPauseUntil) return;
+  if (!gs || gs.classList.contains('hidden')) return;
+  if (performance.now() < pauseLockUntil) return;      // still locked -> ignore
 
   const pauseEl = document.getElementById('pause');
 
   if (e.key === 'Enter'){
+    if (!canTogglePause) return;                        // wait for a keyup first
+    canTogglePause = false;
     paused = !paused;
-    if (pauseEl) {
-      if (paused) pauseEl.classList.remove('hidden');
-      else pauseEl.classList.add('hidden');
-    }
+    if (pauseEl) pauseEl.classList.toggle('hidden', !paused);
   }
 
   if (App.mode === 'training' && e.key === 'i'){
@@ -640,29 +528,20 @@ window.addEventListener('keydown', function(e){
 
 const _resume = document.getElementById('resume');
 if (_resume) _resume.addEventListener('click', function(){
-  paused = false;
-  const p = document.getElementById('pause');
-  if (p) p.classList.add('hidden');
+  paused = false; document.getElementById('pause')?.classList.add('hidden');
 });
-
 const _end = document.getElementById('endBattle');
 if (_end) _end.addEventListener('click', function(){
-  paused = false;
-  const p = document.getElementById('pause');
-  if (p) p.classList.add('hidden');
-  endBattle();
+  paused = false; document.getElementById('pause')?.classList.add('hidden'); endBattle();
 });
-
-const _spawn = document.getElementById('spawnItem');
-if (_spawn) _spawn.addEventListener('click', function(){ spawnMenu(); });
+const _spawn = document.getElementById('spawnItem'); if (_spawn) _spawn.addEventListener('click', function(){ spawnMenu(); });
 
 function spawnMenu(){
   const old = $('#pause .panel .spawnGrid'); if(old) old.remove();
   const grid = document.createElement('div'); grid.className='grid auto gap spawnGrid'; grid.style.marginTop='10px';
-  const opts=[{n:'Heart',c:()=>items.push(new Heart())},{n:'Bomb',c:()=>items.push(new Bomb())},{n:'Assist Trophy',c:()=>items.push(new AssistTrophy())}];
-  opts.forEach(o=>{const it=document.createElement('div'); it.className='item'; it.textContent=o.n; it.onclick=()=>{o.c(); grid.remove();}; grid.appendChild(it);});
-  const pnl = document.querySelector('#pause .panel');
-  if (pnl) pnl.appendChild(grid);
+  [{n:'Heart',c:()=>items.push(new Heart())},{n:'Bomb',c:()=>items.push(new Bomb())},{n:'Assist Trophy',c:()=>items.push(new AssistTrophy())}]
+    .forEach(o=>{const it=document.createElement('div'); it.className='item'; it.textContent=o.n; it.onclick=()=>{o.c(); grid.remove();}; grid.appendChild(it);});
+  document.querySelector('#pause .panel')?.appendChild(grid);
 }
 
 function concludeTimed(){
@@ -675,29 +554,20 @@ function concludeTimed(){
 function showResults(title){
   const rt = document.getElementById('resultTitle');
   if (rt) rt.textContent = title || (p1.dead ? 'Player 2 Wins!' : 'Player 1 Wins!');
-
   const statsEl = document.getElementById('resultStats');
   if (statsEl){
     statsEl.innerHTML='';
     statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P1 — ${p1.name}</h3><div>Damage Dealt: ${p1.stats.dealt.toFixed(1)}</div><div>Falls: ${p1.stats.falls}</div></div>`);
     statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P2 — ${p2.name}</h3><div>Damage Dealt: ${p2.stats.dealt.toFixed(1)}</div><div>Falls: ${p2.stats.falls}</div></div>`);
   }
-
-  const res = document.getElementById('results');
-  if (res) res.classList.remove('hidden');
+  document.getElementById('results')?.classList.remove('hidden');
 }
 
-const againBtn = document.getElementById('again');
-if (againBtn) againBtn.addEventListener('click', function(){
-  const res = document.getElementById('results');
-  if (res) res.classList.add('hidden');
-  startBattle();
+document.getElementById('again')?.addEventListener('click', function(){
+  document.getElementById('results')?.classList.add('hidden'); startBattle();
 });
-const toSelectBtn = document.getElementById('toSelect');
-if (toSelectBtn) toSelectBtn.addEventListener('click', function(){
-  const res = document.getElementById('results');
-  if (res) res.classList.add('hidden');
-  Screens.show('#chars');
+document.getElementById('toSelect')?.addEventListener('click', function(){
+  document.getElementById('results')?.classList.add('hidden'); Screens.show('#chars');
 });
 
 let shakeAmt=0, shakeEnd=0;
