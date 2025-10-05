@@ -211,26 +211,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-$('#gotoSmash')?.addEventListener('click', ()=> Screens.show('#modes'));
-$('#gotoTrainingShortcut')?.addEventListener('click', ()=> { App.mode='training'; $('#modeBadge').textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
-$('#backMain1')?.addEventListener('click', ()=> Screens.show('#main'));
-$('#gotoModes')?.addEventListener('click', ()=> Screens.show('#modes'));
-$('#configureRules')?.addEventListener('click', ()=> Screens.show('#rules'));
-$('#backModes')?.addEventListener('click', ()=> Screens.show('#modes'));
-$('#rulesConfirm')?.addEventListener('click', ()=> { readRules(); Screens.show('#modes'); });
+var el;
 
-document.querySelector('.mode-btn.red')?.addEventListener('click', ()=>{ App.mode='stock'; $('#modeBadge').textContent='Stock'; buildCharacterSelect(); Screens.show('#chars'); });
-document.querySelector('.mode-btn.green')?.addEventListener('click', ()=>{ App.mode='training'; $('#modeBadge').textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
-document.querySelector('.mode-btn.blue')?.addEventListener('click', ()=>{ App.mode='timed'; $('#modeBadge').textContent='Timed'; buildCharacterSelect(); Screens.show('#chars'); });
+el = $('#gotoSmash');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
+el = $('#gotoTrainingShortcut');    if (el) el.addEventListener('click', ()=> { App.mode='training'; var mb=$('#modeBadge'); if(mb) mb.textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
+el = $('#backMain1');               if (el) el.addEventListener('click', ()=> Screens.show('#main'));
+el = $('#gotoModes');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
+el = $('#configureRules');          if (el) el.addEventListener('click', ()=> Screens.show('#rules'));
+el = $('#backModes');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
+el = $('#rulesConfirm');            if (el) el.addEventListener('click', ()=> { readRules(); Screens.show('#modes'); });
 
-$('#charsBack')?.addEventListener('click', ()=> Screens.show('#modes'));
-$('#openStage')?.addEventListener('click', ()=> { buildStages(); Screens.show('#stages'); });
-$('#stagesBack')?.addEventListener('click', ()=> Screens.show('#chars'));
-$('#stagesConfirm')?.addEventListener('click', ()=> Screens.show('#chars'));
-$('#openMusic')?.addEventListener('click', ()=> { buildMusic(); Screens.show('#music'); });
-$('#musicBack')?.addEventListener('click', ()=> Screens.show('#chars'));
-$('#musicConfirm')?.addEventListener('click', ()=> Screens.show('#chars'));
-$('#charsReady')?.addEventListener('click', ()=> startBattle());
+el = document.querySelector('.mode-btn.red');   if (el) el.addEventListener('click', ()=>{ App.mode='stock';  var mb=$('#modeBadge'); if(mb) mb.textContent='Stock';    buildCharacterSelect(); Screens.show('#chars'); });
+el = document.querySelector('.mode-btn.green'); if (el) el.addEventListener('click', ()=>{ App.mode='training';var mb=$('#modeBadge'); if(mb) mb.textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
+el = document.querySelector('.mode-btn.blue');  if (el) el.addEventListener('click', ()=>{ App.mode='timed';   var mb=$('#modeBadge'); if(mb) mb.textContent='Timed';    buildCharacterSelect(); Screens.show('#chars'); });
+
+el = $('#charsBack');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
+el = $('#openStage');               if (el) el.addEventListener('click', ()=> { buildStages(); Screens.show('#stages'); });
+el = $('#stagesBack');              if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
+el = $('#stagesConfirm');           if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
+el = $('#openMusic');               if (el) el.addEventListener('click', ()=> { buildMusic(); Screens.show('#music'); });
+el = $('#musicBack');               if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
+el = $('#musicConfirm');            if (el) el.addEventListener('click', ()=> Screens.show('#chars'));
+el = $('#charsReady');              if (el) el.addEventListener('click', ()=> startBattle());
+
 function readRules(){
   var el;
   el = document.getElementById('ruleStocks');     App.rules.stocks   = el ? +el.value : 3;
@@ -637,7 +640,8 @@ function spawnMenu(){
   const grid = document.createElement('div'); grid.className='grid auto gap spawnGrid'; grid.style.marginTop='10px';
   const opts=[{n:'Heart',c:()=>items.push(new Heart())},{n:'Bomb',c:()=>items.push(new Bomb())},{n:'Assist Trophy',c:()=>items.push(new AssistTrophy())}];
   opts.forEach(o=>{const it=document.createElement('div'); it.className='item'; it.textContent=o.n; it.onclick=()=>{o.c(); grid.remove();}; grid.appendChild(it);});
-  $('#pause .panel')?.appendChild(grid);
+  var pnl = document.querySelector('#pause .panel');
+if (pnl) pnl.appendChild(grid);
 }
 
 function concludeTimed(){
@@ -654,8 +658,19 @@ function showResults(title){
   }
   $('#results')?.classList.remove('hidden');
 }
-$('#again')?.addEventListener('click', ()=>{ $('#results')?.classList.add('hidden'); startBattle(); });
-$('#toSelect')?.addEventListener('click', ()=>{ $('#results')?.classList.add('hidden'); Screens.show('#chars'); });
+var againBtn = document.getElementById('again');
+if (againBtn) againBtn.addEventListener('click', function(){
+  var res = document.getElementById('results');
+  if (res) res.classList.add('hidden');
+  startBattle();
+});
+var toSelectBtn = document.getElementById('toSelect');
+if (toSelectBtn) toSelectBtn.addEventListener('click', function(){
+  var res = document.getElementById('results');
+  if (res) res.classList.add('hidden');
+  Screens.show('#chars');
+});
+
 
 let shakeAmt=0, shakeEnd=0;
 function shake(mag, ms){ shakeAmt=mag; shakeEnd=performance.now()+ms; const tick=()=>{ if(performance.now()<shakeEnd){ const dx=(Math.random()*shakeAmt-shakeAmt/2),dy=(Math.random()*shakeAmt-shakeAmt/2); ctx.setTransform(1,0,0,1,dx,dy); requestAnimationFrame(tick); } else ctx.setTransform(1,0,0,1,0,0); }; tick(); }
