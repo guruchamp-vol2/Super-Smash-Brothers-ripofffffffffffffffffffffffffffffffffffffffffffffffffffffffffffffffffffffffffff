@@ -643,6 +643,11 @@ function concludeTimed(){
 function showResults(title){
   // Debug: log why results are being shown
   console.log('showResults() called', { title, p1_dead: p1 && p1.dead, p2_dead: p2 && p2.dead, startGrace });
+
+  // Immediately stop the game loop and disable controls so the overlay is authoritative
+  running = false;
+  paused = true;
+
   const rt = document.getElementById('resultTitle');
   if (rt) rt.textContent = title || (p1.dead ? 'Player 2 Wins!' : 'Player 1 Wins!');
   const statsEl = document.getElementById('resultStats');
