@@ -62,7 +62,7 @@ const MUSIC = [
   { id:'zen', name:'Zen Garden', generator:(ctx)=> plucks(ctx,[0,2,7,9]) },
 ];
 
-const canvas=$('#game'); const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=false;
+const canvas=$('#game'); const ctx=canvas.getContext('2d'); if(ctx) ctx.imageSmoothingEnabled=false;
 
 const MANIFEST={}; const SPRITES={};
 const ANIMS=[
@@ -135,6 +135,7 @@ function drawFigure(g,pal,pose){
   ['l_arm','r_arm','l_leg','r_leg'].forEach(k=>{ const [x1,y1,x2,y2]=pose[k]; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); });
   g.fillStyle=`rgba(${accent[0]},${accent[1]},${accent[2]},${accent[3]/255})`; const cx=(tx1+tx2)/2, cy=(ty1+ty2)/2; g.fillRect(cx-1,cy-1,2,2);
 }
+// removed duplicate FW/FH
 function makeSheetFromColors(colors){
   const pal=[rgba(colors.body), rgba(colors.outline), rgba(colors.accent||'#ffffff')];
   const rows=ANIMS.length, cols=Math.max(...ANIMS.map(a=>a[1]));
@@ -162,44 +163,45 @@ function buildSpritesForSelection(){
 }
 
 // UI bindings
-$('#btnStart').addEventListener('click', ()=> Screens.show('#main'));
-window.addEventListener('keydown', ()=> { if(!$('#title').classList.contains('hidden')) $('#btnStart').click(); }, {once:true});
+$('#btnStart')?.addEventListener('click', ()=> Screens.show('#main'));
+window.addEventListener('keydown', ()=> { if(!$('#title').classList.contains('hidden')) $('#btnStart')?.click(); }, {once:true});
 
-$('#gotoSmash').onclick = ()=> Screens.show('#modes');
-$('#gotoTrainingShortcut').onclick = ()=> { App.mode='training'; $('#modeBadge').textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); };
-$('#backMain1').onclick = ()=> Screens.show('#main');
-$('#gotoModes').onclick = ()=> Screens.show('#modes');
-$('#configureRules').onclick = ()=> Screens.show('#rules');
-$('#backModes').onclick = ()=> Screens.show('#modes');
-$('#rulesConfirm').onclick = ()=> { readRules(); Screens.show('#modes'); };
+$('#gotoSmash')?.addEventListener('click', ()=> Screens.show('#modes'));
+$('#gotoTrainingShortcut')?.addEventListener('click', ()=> { App.mode='training'; $('#modeBadge').textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
+$('#backMain1')?.addEventListener('click', ()=> Screens.show('#main'));
+$('#gotoModes')?.addEventListener('click', ()=> Screens.show('#modes'));
+$('#configureRules')?.addEventListener('click', ()=> Screens.show('#rules'));
+$('#backModes')?.addEventListener('click', ()=> Screens.show('#modes'));
+$('#rulesConfirm')?.addEventListener('click', ()=> { readRules(); Screens.show('#modes'); });
 
-$('.mode-btn.red').onclick = ()=>{ App.mode='stock'; $('#modeBadge').textContent='Stock'; buildCharacterSelect(); Screens.show('#chars'); };
-$('.mode-btn.green').onclick = ()=>{ App.mode='training'; $('#modeBadge').textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); };
-$('.mode-btn.blue').onclick = ()=>{ App.mode='timed'; $('#modeBadge').textContent='Timed'; buildCharacterSelect(); Screens.show('#chars'); };
+document.querySelector('.mode-btn.red')?.addEventListener('click', ()=>{ App.mode='stock'; $('#modeBadge').textContent='Stock'; buildCharacterSelect(); Screens.show('#chars'); });
+document.querySelector('.mode-btn.green')?.addEventListener('click', ()=>{ App.mode='training'; $('#modeBadge').textContent='Training'; buildCharacterSelect(); Screens.show('#chars'); });
+document.querySelector('.mode-btn.blue')?.addEventListener('click', ()=>{ App.mode='timed'; $('#modeBadge').textContent='Timed'; buildCharacterSelect(); Screens.show('#chars'); });
 
-$('#charsBack').onclick = ()=> Screens.show('#modes');
-$('#openStage').onclick = ()=> { buildStages(); Screens.show('#stages'); };
-$('#stagesBack').onclick = ()=> Screens.show('#chars');
-$('#stagesConfirm').onclick = ()=> Screens.show('#chars');
-$('#openMusic').onclick = ()=> { buildMusic(); Screens.show('#music'); };
-$('#musicBack').onclick = ()=> Screens.show('#chars');
-$('#musicConfirm').onclick = ()=> Screens.show('#chars');
-$('#charsReady').onclick = ()=> startBattle();
+$('#charsBack')?.addEventListener('click', ()=> Screens.show('#modes'));
+$('#openStage')?.addEventListener('click', ()=> { buildStages(); Screens.show('#stages'); });
+$('#stagesBack')?.addEventListener('click', ()=> Screens.show('#chars'));
+$('#stagesConfirm')?.addEventListener('click', ()=> Screens.show('#chars'));
+$('#openMusic')?.addEventListener('click', ()=> { buildMusic(); Screens.show('#music'); });
+$('#musicBack')?.addEventListener('click', ()=> Screens.show('#chars'));
+$('#musicConfirm')?.addEventListener('click', ()=> Screens.show('#chars'));
+$('#charsReady')?.addEventListener('click', ()=> startBattle());
 
 function readRules(){
-  App.rules.stocks = +$('#ruleStocks').value;
-  App.rules.time = +$('#ruleTime').value;
-  App.rules.ratio = +$('#ruleRatio').value;
-  App.rules.itemsOn = $('#ruleItemsOn').checked;
-  App.rules.itemFreq = +$('#ruleItemFreq').value;
-  App.rules.cpuLevel = +$('#ruleCpuLevel').value;
-  App.rules.shake = $('#ruleScreenShake').checked;
-  App.rules.sparks = $('#ruleHitSparks').checked;
+  App.rules.stocks = +($('#ruleStocks')?.value||3);
+  App.rules.time = +($('#ruleTime')?.value||0);
+  App.rules.ratio = +($('#ruleRatio')?.value||1.0);
+  App.rules.itemsOn = $('#ruleItemsOn')?.checked ?? true;
+  App.rules.itemFreq = +($('#ruleItemFreq')?.value||8);
+  App.rules.cpuLevel = +($('#ruleCpuLevel')?.value||3);
+  App.rules.shake = $('#ruleScreenShake')?.checked ?? true;
+  App.rules.sparks = $('#ruleHitSparks')?.checked ?? true;
 }
 function buildCharacterSelect(){
-  $('#modeLabel').textContent = {stock:'Stock Battle',training:'Training',timed:'Timed'}[App.mode];
+  const modeMap={stock:'Stock Battle',training:'Training',timed:'Timed'};
+  if($('#modeLabel')) $('#modeLabel').textContent = modeMap[App.mode];
   const buildGrid = (sideId, altRowId, side) => {
-    const grid = $(sideId); grid.innerHTML = '';
+    const grid = $(sideId); if(!grid) return; grid.innerHTML = '';
     CHARACTERS.forEach((c)=>{
       const el = document.createElement('div'); el.className='item'; el.innerHTML = `<div style="font-weight:800">${c.name}</div><div class="muted">${c.kit}</div>`;
       el.onclick = ()=> { App[side].char = c; App[side].alt = 0; renderAlts(altRowId, side); $$(`${sideId} .item`).forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
@@ -207,7 +209,7 @@ function buildCharacterSelect(){
     });
   };
   const renderAlts = (rowId, side) => {
-    const row = $(rowId); row.innerHTML=''; const sel = App[side].char || CHARACTERS[0];
+    const row = $(rowId); if(!row) return; row.innerHTML=''; const sel = App[side].char || CHARACTERS[0];
     App[side].char = sel;
     sel.alts.forEach((alt,i)=>{
       const b=document.createElement('button'); b.className='ghost row'; b.style.alignItems='center'; b.style.gap='8px';
@@ -223,7 +225,7 @@ function buildCharacterSelect(){
   renderAlts('#p1Alts','p1'); renderAlts('#p2Alts','p2');
 }
 function buildStages(){
-  const grid=$('#stageGrid'); grid.innerHTML='';
+  const grid=$('#stageGrid'); if(!grid) return; grid.innerHTML='';
   STAGES.forEach(st=>{
     const el=document.createElement('div'); el.className='item'; el.innerHTML=`<div style="font-weight:800">${st.name}</div><div class="muted">${st.platforms.length} platforms</div>`;
     el.onclick=()=>{ App.stage=st; $$('#stageGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
@@ -232,7 +234,7 @@ function buildStages(){
   if(!App.stage) App.stage = STAGES[0];
 }
 function buildMusic(){
-  const grid=$('#musicGrid'); grid.innerHTML='';
+  const grid=$('#musicGrid'); if(!grid) return; grid.innerHTML='';
   MUSIC.forEach(t=>{
     const el=document.createElement('div'); el.className='item'; el.textContent = t.name;
     el.onclick=()=>{ App.track=t; startMusic(); $$('#musicGrid .item').forEach(i=>i.style.outline=''); el.style.outline='3px solid var(--accent)'; };
@@ -365,7 +367,7 @@ class Fighter extends Entity{
     else if(this.onGround && speed>15) this.anim='walk';
     else this.anim='idle';
 
-    const A=MANIFEST[this.spriteKey].anims[this.anim]; const fps=A.fps; const max=A.frames; this.ft+=dt; const adv=1/fps;
+    const A=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).anims[this.anim]; const fps=A.fps; const max=A.frames; this.ft+=dt; const adv=1/fps;
     while(this.ft>=adv){ this.ft-=adv; this.frame=(this.frame+1)%max; }
   }
   fall(){
@@ -386,7 +388,7 @@ class Fighter extends Entity{
     }
   }
   render(){
-    const A=MANIFEST[this.spriteKey].anims[this.anim]; const fw=MANIFEST[this.spriteKey].frameSize[0], fh=MANIFEST[this.spriteKey].frameSize[1];
+    const A=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).anims[this.anim]; const fw=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[0], fh=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[1];
     const sx=this.frame*fw, sy=A.row*fh; const px=Math.round(this.x), py=Math.round(this.y);
     ctx.save(); ctx.imageSmoothingEnabled=false;
     if(this.dir<0){ ctx.scale(-1,1); ctx.drawImage(this.sheet, sx,sy,fw,fh, -px-this.w, py, this.w, this.h); }
@@ -525,20 +527,20 @@ function collide(a,b){ return (a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+
 function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.splice(i,1); }
 
 window.addEventListener('keydown',e=>{
-  if($('#gameScreen').classList.contains('hidden')) return;
-  if(e.key==='Enter'){ paused=!paused; $('#pause').classList.toggle('hidden',!paused); }
-  if(App.mode==='training' && e.key==='i'){ paused=true; $('#pause').classList.remove('hidden'); spawnMenu(); }
+  if($('#gameScreen') && $('#gameScreen').classList.contains('hidden')) return;
+  if(e.key==='Enter'){ paused=!paused; $('#pause')?.classList.toggle('hidden',!paused); }
+  if(App.mode==='training' && e.key==='i'){ paused=true; $('#pause')?.classList.remove('hidden'); spawnMenu(); }
 });
-$('#resume').onclick=()=>{ paused=false; $('#pause').classList.add('hidden'); };
-$('#endBattle').onclick=()=>{ paused=false; $('#pause').classList.add('hidden'); endBattle(); };
-$('#spawnItem').onclick=()=> spawnMenu();
+$('#resume')?.addEventListener('click', ()=>{ paused=false; $('#pause')?.classList.add('hidden'); });
+$('#endBattle')?.addEventListener('click', ()=>{ paused=false; $('#pause')?.classList.add('hidden'); endBattle(); });
+$('#spawnItem')?.addEventListener('click', ()=> spawnMenu());
 
 function spawnMenu(){
   const old = $('#pause .panel .spawnGrid'); if(old) old.remove();
   const grid = document.createElement('div'); grid.className='grid auto gap spawnGrid'; grid.style.marginTop='10px';
   const opts=[{n:'Heart',c:()=>items.push(new Heart())},{n:'Bomb',c:()=>items.push(new Bomb())},{n:'Assist Trophy',c:()=>items.push(new AssistTrophy())}];
   opts.forEach(o=>{const it=document.createElement('div'); it.className='item'; it.textContent=o.n; it.onclick=()=>{o.c(); grid.remove();}; grid.appendChild(it);});
-  $('#pause .panel').appendChild(grid);
+  $('#pause .panel')?.appendChild(grid);
 }
 
 function concludeTimed(){
@@ -548,17 +550,18 @@ function concludeTimed(){
   running=false;
 }
 function showResults(title){
-  $('#resultTitle').textContent = title || (p1.dead? 'Player 2 Wins!' : 'Player 1 Wins!');
-  const stats = $('#resultStats'); stats.innerHTML='';
-  stats.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P1 — ${p1.name}</h3><div>Damage Dealt: ${p1.stats.dealt.toFixed(1)}</div><div>Falls: ${p1.stats.falls}</div></div>`);
-  stats.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P2 — ${p2.name}</h3><div>Damage Dealt: ${p2.stats.dealt.toFixed(1)}</div><div>Falls: ${p2.stats.falls}</div></div>`);
-  $('#results').classList.remove('hidden');
+  $('#resultTitle')?.textContent = title || (p1.dead? 'Player 2 Wins!' : 'Player 1 Wins!');
+  const stats = $('#resultStats'); if(stats){ stats.innerHTML='';
+    stats.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P1 — ${p1.name}</h3><div>Damage Dealt: ${p1.stats.dealt.toFixed(1)}</div><div>Falls: ${p1.stats.falls}</div></div>`);
+    stats.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P2 — ${p2.name}</h3><div>Damage Dealt: ${p2.stats.dealt.toFixed(1)}</div><div>Falls: ${p2.stats.falls}</div></div>`);
+  }
+  $('#results')?.classList.remove('hidden');
 }
-$('#again').onclick = ()=>{ $('#results').classList.add('hidden'); startBattle(); };
-$('#toSelect').onclick = ()=>{ $('#results').classList.add('hidden'); Screens.show('#chars'); };
+$('#again')?.addEventListener('click', ()=>{ $('#results')?.classList.add('hidden'); startBattle(); });
+$('#toSelect')?.addEventListener('click', ()=>{ $('#results')?.classList.add('hidden'); Screens.show('#chars'); });
 
 let shakeAmt=0, shakeEnd=0;
-function shake(mag, ms){ shakeAmt=mag; shakeEnd=performance.now()+ms; const orig = ctx.getTransform(); const tick=()=>{ if(performance.now()<shakeEnd){ const dx=(Math.random()*shakeAmt-shakeAmt/2),dy=(Math.random()*shakeAmt-shakeAmt/2); ctx.setTransform(1,0,0,1,dx,dy); requestAnimationFrame(tick); } else ctx.setTransform(1,0,0,1,0,0); }; tick(); }
+function shake(mag, ms){ shakeAmt=mag; shakeEnd=performance.now()+ms; const tick=()=>{ if(performance.now()<shakeEnd){ const dx=(Math.random()*shakeAmt-shakeAmt/2),dy=(Math.random()*shakeAmt-shakeAmt/2); ctx.setTransform(1,0,0,1,dx,dy); requestAnimationFrame(tick); } else ctx.setTransform(1,0,0,1,0,0); }; tick(); }
 function sign(v){ return v<0?-1:1; }
 
 function cpuThink(bot, foe){
