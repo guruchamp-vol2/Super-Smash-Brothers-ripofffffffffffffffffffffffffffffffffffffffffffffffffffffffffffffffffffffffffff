@@ -152,12 +152,17 @@ function drawFigure(g,pal,pose){
   g.fillStyle=`rgba(${accent[0]},${accent[1]},${accent[2]},${accent[3]/255})`; const cx=(tx1+tx2)/2, cy=(ty1+ty2)/2; g.fillRect(cx-1,cy-1,2,2);
 }
 
-function makeSheetFromColors(colors){
+function makeSheetFromColors(colors, animOverride){
   const pal=[rgba(colors.body), rgba(colors.outline), rgba(colors.accent||'#ffffff')];
-  const rows=ANIMS.length, cols=Math.max(...ANIMS.map(a=>a[1]));
+  const list = ANIMS.map(([n,fpsFrames,defFps])=>[n,fpsFrames,defFps]); // clone
+  const mapped = ANIMS.map(([name,defFrames,defFps])=>{
+    const ov = animOverride && animOverride[name];
+    return [name, ov ? ov[0] : defFrames, ov ? ov[1] : defFps];
+  });
+  const rows=mapped.length, cols=Math.max(...mapped.map(a=>a[1]));
   const sheet=document.createElement('canvas'); sheet.width=cols*FW; sheet.height=rows*FH; const g=sheet.getContext('2d'); g.imageSmoothingEnabled=false;
   const meta={ frameSize:[FW,FH], anims:{} };
-  ANIMS.forEach(([name,frames,fps],r)=>{
+  mapped.forEach(([name,frames,fps],r)=>{
     meta.anims[name]={row:r,frames,fps};
     for(let i=0;i<frames;i++){
       const t=i/frames; const pose=POSES[name](t);
@@ -174,11 +179,13 @@ function makeSheetFromColors(colors){
   return {sheet,meta};
 }
 function buildSpritesForSelection(){
-  const p1Sel=(App.p1.char||CHARACTERS[0]).alts[App.p1.alt||0].colors;
-  const p2Sel=(App.p2.char||CHARACTERS[1]).alts[App.p2.alt||0].colors;
-  const p1Id=(App.p1.char||CHARACTERS[0]).id+'_p1'; const p2Id=(App.p2.char||CHARACTERS[1]).id+'_p2';
-  [[p1Id,p1Sel],[p2Id,p2Sel]].forEach(([id,colors])=>{
-    const {sheet,meta}=makeSheetFromColors(colors); SPRITES[id]=sheet; MANIFEST[id]={...meta};
+  const p1Char=(App.p1.char||CHARACTERS[0]);
+  const p2Char=(App.p2.char||CHARACTERS[1]);
+  const p1Sel=p1Char.alts[App.p1.alt||0].colors;
+  const p2Sel=p2Char.alts[App.p2.alt||0].colors;
+  const p1Id=p1Char.id+'_p1'; const p2Id=p2Char.id+'_p2';
+  [[p1Id,p1Sel,p1Char],[p2Id,p2Sel,p2Char]].forEach(([id,colors,charSpec])=>{
+    const {sheet,meta}=makeSheetFromColors(colors, charSpec.anim||null); SPRITES[id]=sheet; MANIFEST[id]={...meta};
   });
   return {p1Id,p2Id};
 }
@@ -347,12 +354,20 @@ class Fighter extends Entity{
   fastfall(){ if(this.vy>50) this.vy += 450; }
   attack(op){
     if(this._cooldown&&this._cooldown>0) return; this._cooldown=0.25; this.tAttack=0.28;
+    if (this.spec.moves && typeof this.spec.moves.attack === 'function'){
+      this.spec.moves.attack(this, op);
+      return;
+    }
     const power=this.spec.kit==='heavy'?(12+Math.random()*6):(8+Math.random()*4);
     const kb=this.spec.kit==='heavy'?600:520;
     if(Math.abs(this.x-op.x)<80 && Math.abs(this.y-op.y)<60){ hit(this,op,power*App.rules.ratio,kb*sign(this.dir)); }
   }
   special(op){
     if(this._scd&&this._scd>0) return; this._scd=.8; this.tSpecial=0.5;
+    if (this.spec.moves && typeof this.spec.moves.special === 'function'){
+      this.spec.moves.special(this, op);
+      return;
+    }
     const spd=420*this.spec.stats.speed*sign(this.dir);
     projectiles.push(new Projectile(this.x+this.w/2,this.y+20,spd,0,this,6*App.rules.ratio,520));
   }
@@ -449,6 +464,16 @@ class Projectile{
   constructor(x,y,vx,vy,owner,damage,kb){ this.x=x; this.y=y; this.w=12; this.h=6; this.vx=vx; this.vy=vy; this.owner=owner; this.damage=damage; this.kb=kb; this.ttl=2.5; this.dead=false; }
   update(dt){ this.x+=this.vx*dt; this.y+=this.vy*dt; this.ttl-=dt; if(this.ttl<=0) this.dead=true; }
   render(){ ctx.fillStyle='#e2e8f0'; ctx.fillRect(this.x,this.y,this.w,this.h); }
+}
+class BouncyProjectile extends Projectile{
+  constructor(x,y,vx,vy,owner,damage,kb){ super(x,y,vx,vy,owner,damage,kb); this.bounces=3; this.w=10; this.h=10; }
+  update(dt){
+    super.update(dt);
+    if(this.x<0 || this.x+this.w>canvas.width){ this.vx*=-1; this.bounces--; }
+    if(this.y<0 || this.y+this.h>canvas.height){ this.vy*=-1; this.bounces--; }
+    if(this.bounces<=0) this.dead=true;
+  }
+  render(){ ctx.fillStyle='#ffd166'; ctx.fillRect(this.x,this.y,this.w,this.h); }
 }
 
 function addHitbox(owner, ox,oy,w,h, dmg, kbx,kby, ttl=0.12){ hitboxes.push({x:owner.x+(owner.dir>0?ox:owner.w-ox-w), y:owner.y+oy, w,h, owner, dmg, kbx:kbx*owner.dir, kby, ttl}); }
@@ -726,6 +751,19 @@ let shakeAmt=0, shakeEnd=0;
 function shake(mag, ms){ shakeAmt=mag; shakeEnd=performance.now()+ms; const tick=()=>{ if(performance.now()<shakeEnd){ const dx=(Math.random()*shakeAmt-shakeAmt/2),dy=(Math.random()*shakeAmt-shakeAmt/2); ctx.setTransform(1,0,0,1,dx,dy); requestAnimationFrame(tick); } else ctx.setTransform(1,0,0,1,0,0); }; tick(); }
 function sign(v){ return v<0?-1:1; }
 
+// === simple helpers for unique moves ===
+function fireFan(owner, count, spreadDeg, speed, dmg){
+  const baseAng = 0; const toRad = Math.PI/180; const spread = spreadDeg * toRad;
+  for(let i=0;i<count;i++){
+    const t = count>1? (i/(count-1)) : 0.5;
+    const ang = -spread/2 + spread*t + baseAng;
+    const vx = Math.cos(ang) * speed * owner.dir;
+    const vy = Math.sin(ang) * speed * 0.6;
+    projectiles.push(new Projectile(owner.x+owner.w/2, owner.y+22, vx, vy, owner, dmg*App.rules.ratio, 520));
+  }
+}
+function dashHit(owner, w,h,dmg,kb, duration){ addHitbox(owner, owner.dir>0?0:-w+owner.w, 0, w, h, dmg*App.rules.ratio, kb, 0, duration); }
+
 function cpuThink(bot, foe){
   const lvl = Math.max(1, Math.min(9, bot.aiLevel || App.rules.cpuLevel || 1));
   const c = { left:false,right:false,jump:false,fastfall:false,attack:false,special:false,shield:false,pick:false,use:false,fs:false };
@@ -738,6 +776,135 @@ function cpuThink(bot, foe){
   if(bot.holding!=null && Math.random()<0.02*lvl){ c.use=true; }
   Object.assign(bot===p2?controlsP2:controlsP1, c);
 }
+
+// === Add requested characters with unique specials and animation tuning ===
+(function(){
+  const fastAnim = { attack:[12,20], special:[12,20], run:[10,22] };
+  const heavyAnim = { attack:[10,14], special:[10,14], run:[8,14] };
+  const magicAnim = { attack:[12,16], special:[14,18], run:[8,16] };
+
+  const add = (...arr)=>arr.forEach(c=>CHARACTERS.push(c));
+
+  add(
+    { id:'sonic', name:'Sonic', kit:'fast', stats:{weight:0.9, speed:1.6}, anim:fastAnim, moves:{
+      attack:(self,op)=>{ dashHit(self, self.w+46, self.h-10, 7, 600, 0.16); },
+      special:(self,op)=>{ if(self._scd>0) return; self._scd=.9; self.tSpecial=.45; self.vx=900*sign(self.dir); dashHit(self, self.w+80, self.h-8, 10, 660, 0.18); }
+    }, alts:[
+      {name:'Default', colors:{body:'#1fb6ff', outline:'#005bbb', accent:'#a7f3ff'}},
+      {name:'Dark',    colors:{body:'#0ea5e9', outline:'#111827', accent:'#93c5fd'}}
+    ]},
+    { id:'tails', name:'Tails', kit:'ranged', stats:{weight:0.95, speed:1.3}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ fireFan(s,2,20,420,5); },
+      special:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; fireFan(s,3,40,520,6); }
+    }, alts:[
+      {name:'Default', colors:{body:'#fbbf24', outline:'#b45309', accent:'#fff3c4'}},
+      {name:'Blue',    colors:{body:'#60a5fa', outline:'#1e40af', accent:'#bfdbfe'}}
+    ]},
+    { id:'knuckles', name:'Knuckles', kit:'heavy', stats:{weight:1.2, speed:1.0}, anim:heavyAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+30, s.h-10, 10, 640, 0.14); },
+      special:(s,o)=>{ s._scd=1.1; s.tSpecial=.5; addHitbox(s, -20, s.h-24, s.w+40, 28, 14*App.rules.ratio, 700, 0, 0.18); if(App.rules.shake) shake(6,250); }
+    }, alts:[
+      {name:'Default', colors:{body:'#ef4444', outline:'#7f1d1d', accent:'#fecaca'}},
+      {name:'Emerald', colors:{body:'#10b981', outline:'#065f46', accent:'#a7f3d0'}}
+    ]},
+    { id:'amy', name:'Amy', kit:'heavy', stats:{weight:1.05, speed:1.15}, anim:heavyAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+50, s.h-8, 9, 600, 0.16); },
+      special:(s,o)=>{ s._scd=1.0; s.tSpecial=.6; dashHit(s, s.w+70, s.h, 12, 650, 0.2); }
+    }, alts:[
+      {name:'Default', colors:{body:'#f472b6', outline:'#9d174d', accent:'#ffd1e7'}},
+      {name:'Mint',    colors:{body:'#34d399', outline:'#065f46', accent:'#c7f9e5'}}
+    ]},
+    { id:'shadow', name:'Shadow', kit:'fast', stats:{weight:1.0, speed:1.5}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+40, s.h-8, 8, 600, 0.14); },
+      special:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; s.vx = 1000*sign(s.dir); dashHit(s, s.w+90, s.h-10, 11, 680, 0.18); }
+    }, alts:[
+      {name:'Default', colors:{body:'#111827', outline:'#ef4444', accent:'#ffe4e6'}},
+      {name:'Gold',    colors:{body:'#fbbf24', outline:'#92400e', accent:'#fff1b8'}}
+    ]},
+    { id:'cream', name:'Cream', kit:'support', stats:{weight:0.85, speed:1.2}, anim:magicAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+22, s.h-12, 6, 520, 0.12); },
+      special:(s,o)=>{ s._scd=1.2; s.tSpecial=.5; helpers.push(new Helper(s,o)); }
+    }, alts:[
+      {name:'Default', colors:{body:'#fcd34d', outline:'#b45309', accent:'#fff0b3'}},
+      {name:'Cherry',  colors:{body:'#fda4af', outline:'#9f1239', accent:'#ffe4e6'}}
+    ]},
+
+    // Undertale / Deltarune style casts (simplified specials)
+    { id:'frisk', name:'Frisk', kit:'fast', stats:{weight:0.92, speed:1.35}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+28, s.h-10, 8, 560, 0.14); },
+      special:(s,o)=>{ fireFan(s,3,20,500,6); }
+    }, alts:[{name:'Default', colors:{body:'#93c5fd', outline:'#1e40af', accent:'#bfdbfe'}},{name:'Green', colors:{body:'#86efac', outline:'#065f46', accent:'#dcfce7'}}]},
+    { id:'toriel', name:'Toriel', kit:'zoner', stats:{weight:1.0, speed:1.0}, anim:magicAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+24, s.h-8, 7, 540, 0.14); },
+      special:(s,o)=>{ fireFan(s,5,60,480,5); }
+    }, alts:[{name:'Default', colors:{body:'#e9d5ff', outline:'#7c3aed', accent:'#f7ecff'}},{name:'Fire', colors:{body:'#fca5a5', outline:'#7f1d1d', accent:'#fecaca'}}]},
+    { id:'papyrus', name:'Papyrus', kit:'ranged', stats:{weight:0.98, speed:1.1}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+30, s.h-10, 8, 560, 0.14); },
+      special:(s,o)=>{ fireFan(s,4,10,540,5); }
+    }, alts:[{name:'Default', colors:{body:'#d1fae5', outline:'#10b981', accent:'#bbf7d0'}},{name:'Blue', colors:{body:'#93c5fd', outline:'#1d4ed8', accent:'#c7d2fe'}}]},
+    { id:'sans', name:'Sans', kit:'ranged', stats:{weight:0.9, speed:1.1}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+22, s.h-10, 7, 520, 0.12); },
+      special:(s,o)=>{ fireFan(s,6,30,560,4); }
+    }, alts:[{name:'Default', colors:{body:'#e5e7eb', outline:'#1f2937', accent:'#cbd5e1'}},{name:'Blue', colors:{body:'#93c5fd', outline:'#1d4ed8', accent:'#bfdbfe'}}]},
+    { id:'undyne', name:'Undyne', kit:'ranged', stats:{weight:1.1, speed:1.15}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+34, s.h-8, 9, 600, 0.14); },
+      special:(s,o)=>{ fireFan(s,5,20,640,6); }
+    }, alts:[{name:'Default', colors:{body:'#60a5fa', outline:'#1d4ed8', accent:'#bfdbfe'}},{name:'Green', colors:{body:'#86efac', outline:'#065f46', accent:'#dcfce7'}}]},
+    { id:'mettaton', name:'Mettaton', kit:'ranged', stats:{weight:1.05, speed:1.05}, anim:magicAnim, moves:{
+      attack:(s,o)=>{ fireFan(s,2,16,520,5); },
+      special:(s,o)=>{ fireFan(s,6,60,520,4); }
+    }, alts:[{name:'Default', colors:{body:'#f472b6', outline:'#7c3aed', accent:'#fbcfe8'}},{name:'Silver', colors:{body:'#e5e7eb', outline:'#6b7280', accent:'#f3f4f6'}}]},
+    { id:'mettaton_ex', name:'Mettaton EX', kit:'ranged', stats:{weight:1.05, speed:1.2}, anim:magicAnim, moves:{
+      attack:(s,o)=>{ fireFan(s,3,24,560,5); },
+      special:(s,o)=>{ fireFan(s,10,80,600,4); }
+    }, alts:[{name:'Default', colors:{body:'#f472b6', outline:'#ff6b81', accent:'#ffd1e7'}},{name:'Black', colors:{body:'#111827', outline:'#4b5563', accent:'#e5e7eb'}}]},
+    { id:'asgore', name:'Asgore', kit:'heavy', stats:{weight:1.25, speed:0.95}, anim:heavyAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+40, s.h, 11, 700, 0.18); },
+      special:(s,o)=>{ s._scd=1.2; s.tSpecial=.6; dashHit(s, s.w+90, s.h, 15, 750, 0.22); if(App.rules.shake) shake(10,300); }
+    }, alts:[{name:'Default', colors:{body:'#f59e0b', outline:'#92400e', accent:'#fde68a'}},{name:'Blue', colors:{body:'#60a5fa', outline:'#1e40af', accent:'#bfdbfe'}}]},
+
+    { id:'kris', name:'Kris', kit:'fast', stats:{weight:1.0, speed:1.3}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+30, s.h-8, 8, 600, 0.14); },
+      special:(s,o)=>{ dashHit(s, s.w+70, s.h-8, 10, 640, 0.18); }
+    }, alts:[{name:'Default', colors:{body:'#60a5fa', outline:'#1e40af', accent:'#93c5fd'}},{name:'Yellow', colors:{body:'#fde047', outline:'#a16207', accent:'#fff4b3'}}]},
+    { id:'susie', name:'Susie', kit:'heavy', stats:{weight:1.2, speed:1.05}, anim:heavyAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+46, s.h, 10, 660, 0.16); },
+      special:(s,o)=>{ s._scd=1.1; s.tSpecial=.5; dashHit(s, s.w+80, s.h, 13, 700, 0.2); }
+    }, alts:[{name:'Default', colors:{body:'#a78bfa', outline:'#6d28d9', accent:'#ddd6fe'}},{name:'Green', colors:{body:'#34d399', outline:'#065f46', accent:'#a7f3d0'}}]},
+    { id:'ralsei', name:'Ralsei', kit:'magic', stats:{weight:0.95, speed:1.15}, anim:magicAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+24, s.h-10, 7, 540, 0.14); },
+      special:(s,o)=>{ fireFan(s,4,50,520,6); }
+    }, alts:[{name:'Default', colors:{body:'#34d399', outline:'#065f46', accent:'#a7f3d0'}},{name:'Pink', colors:{body:'#f472b6', outline:'#9d174d', accent:'#fecdd3'}}]},
+    { id:'jevil', name:'Jevil', kit:'chaos', stats:{weight:1.0, speed:1.35}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ const vx=600*sign(s.dir); projectiles.push(new BouncyProjectile(s.x+s.w/2,s.y+20,vx, -80, s, 6*App.rules.ratio, 520)); },
+      special:(s,o)=>{ projectiles.push(new BouncyProjectile(s.x+s.w/2,s.y+20,520*sign(s.dir),-200,s,7*App.rules.ratio,540)); projectiles.push(new BouncyProjectile(s.x+s.w/2,s.y+20,-520*sign(s.dir),-120,s,7*App.rules.ratio,540)); }
+    }, alts:[{name:'Default', colors:{body:'#a78bfa', outline:'#3b0764', accent:'#c4b5fd'}},{name:'Gold', colors:{body:'#facc15', outline:'#78350f', accent:'#fde68a'}}]},
+    { id:'spade_king', name:'Spade King', kit:'heavy', stats:{weight:1.3, speed:0.95}, anim:heavyAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+40, s.h, 11, 700, 0.18); },
+      special:(s,o)=>{ s._scd=1.2; s.tSpecial=.6; dashHit(s, s.w+100, s.h, 16, 760, 0.22); if(App.rules.shake) shake(10,300); }
+    }, alts:[{name:'Default', colors:{body:'#111827', outline:'#4338ca', accent:'#a5b4fc'}},{name:'Ruby', colors:{body:'#ef4444', outline:'#7f1d1d', accent:'#fecaca'}}]},
+    { id:'noelle', name:'Noelle', kit:'magic', stats:{weight:0.95, speed:1.15}, anim:magicAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+24, s.h-10, 7, 540, 0.14); },
+      special:(s,o)=>{ fireFan(s,3,30,560,6); }
+    }, alts:[{name:'Default', colors:{body:'#93c5fd', outline:'#1e40af', accent:'#bfdbfe'}},{name:'Mint', colors:{body:'#86efac', outline:'#065f46', accent:'#dcfce7'}}]},
+    { id:'spamton', name:'Spamton', kit:'ranged', stats:{weight:0.98, speed:1.2}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ fireFan(s,3,24,540,4); },
+      special:(s,o)=>{ fireFan(s,6,60,580,4); }
+    }, alts:[{name:'Default', colors:{body:'#e5e7eb', outline:'#111827', accent:'#facc15'}},{name:'Cyan', colors:{body:'#22d3ee', outline:'#0e7490', accent:'#a5f3fc'}}]},
+    { id:'tenna', name:'Tenna', kit:'fast', stats:{weight:1.0, speed:1.4}, anim:fastAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+30, s.h-8, 8, 600, 0.14); },
+      special:(s,o)=>{ fireFan(s,4,16,660,6); }
+    }, alts:[{name:'Default', colors:{body:'#06b6d4', outline:'#0e7490', accent:'#a5f3fc'}},{name:'Violet', colors:{body:'#a78bfa', outline:'#6d28d9', accent:'#ddd6fe'}}]},
+    { id:'knight', name:'Knight', kit:'heavy', stats:{weight:1.2, speed:1.0}, anim:heavyAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+36, s.h, 10, 680, 0.16); },
+      special:(s,o)=>{ s._scd=1.2; s.tSpecial=.6; dashHit(s, s.w+80, s.h, 14, 720, 0.2); }
+    }, alts:[{name:'Default', colors:{body:'#cbd5e1', outline:'#475569', accent:'#94a3b8'}},{name:'Crimson', colors:{body:'#ef4444', outline:'#7f1d1d', accent:'#fecaca'}}]},
+    { id:'gerson', name:'Gerson', kit:'heavy', stats:{weight:1.15, speed:0.98}, anim:heavyAnim, moves:{
+      attack:(s,o)=>{ dashHit(s, s.w+30, s.h, 10, 640, 0.16); },
+      special:(s,o)=>{ s._scd=1.2; s.tSpecial=.55; addHitbox(s, -10, s.h-20, s.w+60, 26, 12*App.rules.ratio, 700, 0, 0.2); if(App.rules.shake) shake(8,260); }
+    }, alts:[{name:'Default', colors:{body:'#22c55e', outline:'#14532d', accent:'#86efac'}},{name:'Stone', colors:{body:'#94a3b8', outline:'#334155', accent:'#cbd5e1'}}]}
+  );
+})();
 
 window.Smashlike = {
   addStage(stage){ STAGES.push(stage); },
