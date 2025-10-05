@@ -641,7 +641,7 @@ function spawnMenu(){
   const opts=[{n:'Heart',c:()=>items.push(new Heart())},{n:'Bomb',c:()=>items.push(new Bomb())},{n:'Assist Trophy',c:()=>items.push(new AssistTrophy())}];
   opts.forEach(o=>{const it=document.createElement('div'); it.className='item'; it.textContent=o.n; it.onclick=()=>{o.c(); grid.remove();}; grid.appendChild(it);});
   var pnl = document.querySelector('#pause .panel');
-if (pnl) pnl.appendChild(grid);
+  if (pnl) pnl.appendChild(grid);
 }
 
 function concludeTimed(){
@@ -650,14 +650,22 @@ function concludeTimed(){
   showResults(p1score===p2score? 'Sudden Death (proto)' : (p1score>p2score? 'Player 1 Wins!' : 'Player 2 Wins!'));
   running=false;
 }
+
 function showResults(title){
-  $('#resultTitle')?.textContent = title || (p1.dead? 'Player 2 Wins!' : 'Player 1 Wins!');
-  const stats = $('#resultStats'); if(stats){ stats.innerHTML='';
-    stats.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P1 — ${p1.name}</h3><div>Damage Dealt: ${p1.stats.dealt.toFixed(1)}</div><div>Falls: ${p1.stats.falls}</div></div>`);
-    stats.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P2 — ${p2.name}</h3><div>Damage Dealt: ${p2.stats.dealt.toFixed(1)}</div><div>Falls: ${p2.stats.falls}</div></div>`);
+  var rt = document.getElementById('resultTitle');
+  if (rt) rt.textContent = title || (p1.dead ? 'Player 2 Wins!' : 'Player 1 Wins!');
+
+  var statsEl = document.getElementById('resultStats');
+  if (statsEl){
+    statsEl.innerHTML='';
+    statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P1 — ${p1.name}</h3><div>Damage Dealt: ${p1.stats.dealt.toFixed(1)}</div><div>Falls: ${p1.stats.falls}</div></div>`);
+    statsEl.insertAdjacentHTML('beforeend', `<div class="panel"><h3>P2 — ${p2.name}</h3><div>Damage Dealt: ${p2.stats.dealt.toFixed(1)}</div><div>Falls: ${p2.stats.falls}</div></div>`);
   }
-  $('#results')?.classList.remove('hidden');
+
+  var res = document.getElementById('results');
+  if (res) res.classList.remove('hidden');
 }
+
 var againBtn = document.getElementById('again');
 if (againBtn) againBtn.addEventListener('click', function(){
   var res = document.getElementById('results');
