@@ -10,6 +10,8 @@ const App = {
   stage: null,
   track: null,
 };
+// prevent immediate pause when entering battle (e.g., pressing Enter on Ready)
+let suppressPauseUntil = 0;
 
 const CHARACTERS = [
   { id:'bruiser', name:'Bruiser', kit:'heavy', stats:{weight:1.1, speed:1.0},
@@ -306,6 +308,7 @@ function buildMusic(){
 
 // Audio
 let audioCtx=null, currentNodes=[];
+
 function ensureAudio(){ if(!audioCtx){ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); } }
 function stopMusic(){ currentNodes.forEach(n=>{try{n.stop? n.stop(): n.disconnect()}catch{} }); currentNodes=[]; }
 function startMusic(){ ensureAudio(); stopMusic(); if(App.track) currentNodes = App.track.generator(audioCtx) || []; }
@@ -538,6 +541,9 @@ function startBattle(){
   $('#results')?.classList.add('hidden');
   $('#pause')?.classList.add('hidden');
 
+  // block pause/input toggles for ~800ms so Enter/Space can't fire on load
+  suppressPauseUntil = performance.now() + 800;
+
   Screens.show('#gameScreen'); ensureAudio(); startMusic();
   if(!App.stage) App.stage = STAGES[0];
 
@@ -611,6 +617,9 @@ function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.s
 window.addEventListener('keydown', function(e){
   const gs = document.getElementById('gameScreen');
   if (!gs || gs.classList.contains('hidden')) return; // ignore when not in-game
+
+  // NEW: don't react to keys during the short input-lock window
+  if (performance.now() < suppressPauseUntil) return;
 
   const pauseEl = document.getElementById('pause');
 
