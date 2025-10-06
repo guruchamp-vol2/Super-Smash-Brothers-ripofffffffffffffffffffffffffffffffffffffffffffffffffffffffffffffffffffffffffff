@@ -225,18 +225,10 @@ function makeSheetFromPortrait(img){
   return {sheet,meta};
 }
 
-// --- debug overlay (helps diagnose running/paused/results state) ---
-const debugOverlay = (function(){
-  try{
-    const d = document.createElement('div'); d.id='debugOverlay';
-    Object.assign(d.style,{
-      position:'fixed', right:'12px', top:'12px', padding:'8px 10px', background:'rgba(0,0,0,0.6)', color:'#fff', fontSize:'12px', zIndex:99999, borderRadius:'8px', fontFamily:'monospace'
-    });
-    document.body && document.body.appendChild(d);
-    return d;
-  }catch(e){ return null; }
-})();
-function updateDebug(){ try{ if(!debugOverlay) return; debugOverlay.textContent = `running:${running} paused:${paused} startGrace:${(startGrace||0).toFixed(2)} p1.dead:${p1?p1.dead:false} p2.dead:${p2?p2.dead:false} p1.stocks:${p1?p1.stocks:'-'} p2.stocks:${p2?p2.stocks:'-'}` }catch(e){} }
+/* Debug overlay disabled */
+const debugOverlay = null;
+function updateDebug() {}
+
 
 // ===== runtime sprite gen =====
 const MANIFEST={}; const SPRITES={};
