@@ -64,6 +64,19 @@ function ensureSocket(){
       }catch(e){ console.error('Failed to start match from server', e); }
     });
 
+document.addEventListener('DOMContentLoaded', () => {
+  $$('.mode-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const m = btn.getAttribute('data-mode')||'stock';
+      App.mode = m;
+      const labels = { stock:'Stock', training:'Training', timed:'Timed', hyper:'Hyper' };
+      const badge = document.getElementById('modeBadge'); if (badge) badge.textContent = labels[m]||m;
+      buildCharacterSelect();
+      Screens.show('#chars');
+    });
+  });
+});
+
     // Input relay from peer
     s.on('peerInput', ({ controls })=>{
       Object.assign(Online.peerControls, controls||{});
