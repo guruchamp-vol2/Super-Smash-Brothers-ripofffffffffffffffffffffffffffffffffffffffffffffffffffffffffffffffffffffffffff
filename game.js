@@ -262,9 +262,9 @@ const ctx = canvas ? canvas.getContext('2d') : null;
 if (ctx) ctx.imageSmoothingEnabled = false;
 
 // Global switch: use portrait-derived fallback sheets when no real sheet exists
-const USE_PORTRAIT_FALLBACK = false;
+const USE_PORTRAIT_FALLBACK = true;
 // Force procedural tiny character sprites (ignore portrait + external sheets)
-const FORCE_PROCEDURAL = true;
+const FORCE_PROCEDURAL = false;
 
 // Portrait mapping loaded from assets/portraits.json
 let PORTRAITS = {};
