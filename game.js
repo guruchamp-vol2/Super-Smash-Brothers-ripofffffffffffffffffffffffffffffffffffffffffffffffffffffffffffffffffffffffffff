@@ -425,10 +425,17 @@ el = $('#btnJoinRoom');             if (el) el.addEventListener('click', ()=> { 
 el = $('#btnRandom');               if (el) el.addEventListener('click', ()=> { const name=$('#onlineName')?.value||''; ensureSocket(); Online.socket.emit('randomQueue', { name }); });
 el = $('#onlineGoSelect');          if (el) el.addEventListener('click', ()=> { if(!Online.active){ onlineStatus('Create/join a room or match first.'); return;} buildCharacterSelect(); Screens.show('#chars'); });
 
-el = document.querySelector('.mode-btn.red');   if (el) el.addEventListener('click', ()=>{ App.mode='stock';  $('#modeBadge')&&($('#modeBadge').textContent='Stock');    buildCharacterSelect(); Screens.show('#chars'); });
-el = document.querySelector('.mode-btn.green'); if (el) el.addEventListener('click', ()=>{ App.mode='training';$('#modeBadge')&&($('#modeBadge').textContent='Training'); buildCharacterSelect(); Screens.show('#chars'); });
-el = document.querySelector('.mode-btn.blue');  if (el) el.addEventListener('click', ()=>{ App.mode='timed';   $('#modeBadge')&&($('#modeBadge').textContent='Timed');    buildCharacterSelect(); Screens.show('#chars'); });
-el = document.querySelector('.mode-btn.purple');  if (el) el.addEventListener('click', ()=>{ App.mode='hyper'; $('#modeBadge')&&($('#modeBadge').textContent='Hyper'); buildCharacterSelect(); Screens.show('#chars'); });
+// Generic handler for all mode buttons
+$('.mode-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const m = btn.getAttribute('data-mode')||'stock';
+    App.mode = m;
+    const labels = { stock:'Stock', training:'Training', timed:'Timed', hyper:'Hyper' };
+    const badge = document.getElementById('modeBadge'); if (badge) badge.textContent = labels[m]||m;
+    buildCharacterSelect();
+    Screens.show('#chars');
+  });
+});
 
 el = $('#charsBack');               if (el) el.addEventListener('click', ()=> Screens.show('#modes'));
 el = $('#openStage');               if (el) el.addEventListener('click', ()=> { buildStages(); Screens.show('#stages'); });
@@ -484,8 +491,8 @@ function readRules(){
 }
 
 function buildCharacterSelect(){
-  const modeMap={stock:'Stock Battle',training:'Training',timed:'Timed'};
-  $('#modeLabel') && ($('#modeLabel').textContent = modeMap[App.mode]);
+  const modeMap={stock:'Stock Battle',training:'Training',timed:'Timed',hyper:'Hyper Smash'};
+  $('#modeLabel') && ($('#modeLabel').textContent = modeMap[App.mode] || '—');
   if (!ensurePortraitsLoaded._done){ ensurePortraitsLoaded().then(buildCharacterSelect); }
 
   // Defaults for both sides
