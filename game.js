@@ -670,17 +670,21 @@ class Fighter extends Entity{
     this.aiLevel=(side===1?App.rules.cpuLevel:0);
     this.anim='idle'; this.frame=0; this.ft=0;
     this.tAttack=0; this.tSpecial=0; this.tHitstun=0; this.tKO=0;
-    this.fs=0; this.fsActive=false; this.tFS=0; this.buff={speed:0,armor:0,double:0,damage:0}; this.extraJumps=0;
+    this.fs=0; this.fsActive=false; this.tFS=0; this.buff={speed:0,armor:0,double:0,damage:0,invuln:0,invis:0,jump:0,rocket:0,reflect:0,special:0,phase:0,regen:0,healingAura:0,slow:0}; this.extraJumps=0;
   }
   jump(){
-    if(this.onGround){ this.vy=-JUMP_V; this.onGround=false; this.extraJumps = (this.buff.double>0 ? 1 : 0); }
-    else if(this.extraJumps>0){ this.vy = -JUMP_V*0.9; this.extraJumps--; }
+    if(this.onGround){ this.vy= -JUMP_V * (this.buff.jump>0?1.35:1.0); this.onGround=false; this.extraJumps = (this.buff.double>0 ? 1 : 0); }
+    else if(this.extraJumps>0){ this.vy = -JUMP_V*0.9 * (this.buff.jump>0?1.2:1.0); this.extraJumps--; }
   }
   fastfall(){ if(this.vy>50) this.vy += 450; }
   attack(op){
     if(this._cooldown&&this._cooldown>0) return; this._cooldown=0.25; this.tAttack=0.28;
     if (this.spec.moves && typeof this.spec.moves.attack === 'function'){
       this.spec.moves.attack(this, op);
+      return;
+    }
+    if (this.holding && typeof this.holding.onAttack === 'function'){
+      this.holding.onAttack(this, op);
       return;
     }
     const power=this.spec.kit==='heavy'?(12+Math.random()*6):(8+Math.random()*4);
@@ -691,6 +695,10 @@ class Fighter extends Entity{
     if(this._scd&&this._scd>0) return; this._scd=.8; this.tSpecial=0.5;
     if (this.spec.moves && typeof this.spec.moves.special === 'function'){
       this.spec.moves.special(this, op);
+      return;
+    }
+    if (this.holding && typeof this.holding.onSpecial === 'function'){
+      this.holding.onSpecial(this, op);
       return;
     }
     const spd=420*this.spec.stats.speed*sign(this.dir);
@@ -718,6 +726,18 @@ class Fighter extends Entity{
     this.buff.armor=Math.max(0,this.buff.armor-dt);
     this.buff.double=Math.max(0,this.buff.double-dt);
     this.buff.damage=Math.max(0,this.buff.damage-dt);
+    this.buff.invuln=Math.max(0,(this.buff.invuln||0)-dt);
+    this.buff.invis=Math.max(0,(this.buff.invis||0)-dt);
+    this.buff.jump=Math.max(0,(this.buff.jump||0)-dt);
+    this.buff.rocket=Math.max(0,(this.buff.rocket||0)-dt);
+    this.buff.reflect=Math.max(0,(this.buff.reflect||0)-dt);
+    this.buff.special=Math.max(0,(this.buff.special||0)-dt);
+    this.buff.phase=Math.max(0,(this.buff.phase||0)-dt);
+    this.buff.regen=Math.max(0,(this.buff.regen||0)-dt);
+    this.buff.healingAura=Math.max(0,(this.buff.healingAura||0)-dt);
+    this.buff.slow=Math.max(0,(this.buff.slow||0)-dt);
+    if(this.buff.regen>0){ this.damage = Math.max(0, this.damage - 6*dt); }
+    if(this.buff.healingAura>0){ this.damage = Math.max(0, this.damage - 4*dt); }
 
     this.inv=Math.max(0,this.inv-dt); this._cooldown=Math.max(0,(this._cooldown||0)-dt); this._scd=Math.max(0,(this._scd||0)-dt);
     this.tAttack=Math.max(0,this.tAttack-dt); this.tSpecial=Math.max(0,this.tSpecial-dt);
@@ -727,6 +747,9 @@ class Fighter extends Entity{
     const move=(controls.right?1:0)-(controls.left?1:0);
     const accel=this.onGround?210:140;
     let spdMul = this.spec.stats.speed * (this.buff.speed>0?1.5:1.0) * (App.mode==='hyper'?1.25:1.0);
+    if (this.buff.jump>0) spdMul *= 1.1;
+    if (this.buff.slow>0) spdMul *= 0.6;
+    if (this.holding && this.holding.speedMul) spdMul *= this.holding.speedMul;
     this.vx += move*accel*dt*spdMul; this.dir = move!==0? (move>0?1:-1) : this.dir;
     if(!controls.left && !controls.right) this.vx*= this.onGround? FRICTION : AIR_FRICTION;
     if(controls.jump) { this.jump(); controls.jump=false; }
@@ -790,7 +813,7 @@ class Fighter extends Entity{
     const A=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).anims[this.anim];
     const fw=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[0], fh=(MANIFEST[this.spriteKey]||MANIFEST[Object.keys(MANIFEST)[0]]).frameSize[1];
     const sx=this.frame*fw, sy=A.row*fh; const px=Math.round(this.x), py=Math.round(this.y);
-    ctx.save(); ctx.imageSmoothingEnabled=false;
+    ctx.save(); ctx.imageSmoothingEnabled=false; if (this.buff && this.buff.invis>0) ctx.globalAlpha = 0.4;
     if(this.dir<0){ ctx.scale(-1,1); ctx.drawImage(this.sheet, sx,sy,fw,fh, -px-this.w, py, this.w, this.h); }
     else { ctx.drawImage(this.sheet, sx,sy,fw,fh, px, py, this.w, this.h); }
     ctx.restore();
@@ -820,6 +843,8 @@ const hitboxes=[];
 
 function hit(src, tgt, dmg, kb){
   if(tgt.inv>0) return;
+  if(tgt.buff && tgt.buff.invuln>0) return;
+  if(tgt.buff && tgt.buff.phase>0){ tgt.buff.phase = 0; tgt.inv = Math.max(tgt.inv||0, 0.15); return; }
   // modifiers
   let dmg2 = dmg;
   if(src && src.buff && src.buff.damage>0) dmg2 *= 1.25;
@@ -827,6 +852,7 @@ function hit(src, tgt, dmg, kb){
 
   tgt.damage += dmg2;
   let kbScale = (1+tgt.damage/120) * 0.9;
+  if (tgt.holding && tgt.holding.reduceKbFactor){ kbScale *= tgt.holding.reduceKbFactor; }
   if(tgt && tgt.buff && tgt.buff.armor>0){ kbScale *= 0.6; }
   const kbBase = Math.abs(kb) * (App.mode==='hyper'?1.3:1.0);
   tgt.vx = sign(kb) * kbBase * kbScale;
@@ -882,10 +908,164 @@ class Helper{
     if(Math.abs(this.x-this.target.x)<50 && Math.abs(this.y-this.target.y)<60){ hit(this.owner,this.target,6*App.rules.ratio,420*dir); } }
   render(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,this.w,this.h); } }
 function randomPowerUp(){ const r=Math.random(); if(r<.25) return new PU_Speed(); if(r<.5) return new PU_Armor(); if(r<.75) return new PU_Double(); return new PU_Damage(); }
+
+// === Extended items ===
+// Utility helpers for item effects
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function radialHit(owner, cx, cy, r, dmg, kb){
+  const apply=(t)=>{
+    const dx=t.x+ t.w/2 - cx, dy=t.y+ t.h/2 - cy; const dir = Math.sign(dx)||1; hit(owner, t, dmg, kb*dir);
+  };
+  if (p1 && Math.hypot((p1.x+p1.w/2)-cx, (p1.y+p1.h/2)-cy) <= r) apply(p1);
+  if (p2 && Math.hypot((p2.x+p2.w/2)-cx, (p2.y+p2.h/2)-cy) <= r) apply(p2);
+}
+
+class NovaCore extends Item{ constructor(){ super('Nova Core', true); this.color='#f97316'; }
+  use(by){ radialHit(by, by.x+by.w/2, by.y+by.h/2, 160, 20*App.rules.ratio, 820); if(App.rules.shake) shake(10,280); }
+  draw(){ ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(this.x+10,this.y+10,9,0,Math.PI*2); ctx.fill(); }
+}
+class EchoBeacon extends Item{ constructor(){ super('Echo Beacon', true); this.color='#22d3ee'; }
+  use(by,op){ for(let i=0;i<2;i++) helpers.push(new Helper(by, opponentOf(by))); }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,20,12); }
+}
+class ShockBlade extends Item{ constructor(){ super('Shock Blade', false); this.color='#7dd3fc'; this.reduceKbFactor=1.0; this.speedMul=1.0; }
+  onAttack(by,op){ dashHit(by, by.w+60, by.h-8, 9*App.rules.ratio, 700, 0.18); }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,20,4); }
+}
+class MeteorGauntlet extends Item{ constructor(){ super('Meteor Gauntlet', true); this.color='#fb7185'; }
+  use(by){ by.buff.damage = Math.max(by.buff.damage, 10); }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,16,16); }
+}
+class PhotonBlaster extends Item{ constructor(){ super('Photon Blaster', false); this.color='#60a5fa'; this.ammo=8; }
+  use(by){ if(this.ammo<=0){ this.consumable=true; return; } this.ammo--; projectiles.push(new Projectile(by.x+by.w/2, by.y+20, 900*by.dir, 0, by, 5*App.rules.ratio, 520)); }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,18,10); }
+}
+class PlasmaLauncher extends Item{ constructor(){ super('Plasma Launcher', false); this.color='#a78bfa'; }
+  use(by){ projectiles.push(new Projectile(by.x+by.w/2, by.y+18, 600*by.dir, -40, by, 9*App.rules.ratio, 640)); }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,20,12); }
+}
+class EmberFlower extends Item{ constructor(){ super('Ember Flower', false); this.color='#f59e0b'; }
+  use(by){ for(let i=0;i<4;i++){ projectiles.push(new Projectile(by.x+by.w/2, by.y+18, (380+60*i)*by.dir, -30+i*8, by, 3*App.rules.ratio, 420)); } }
+  draw(){ ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(this.x+10,this.y+10,8,0,Math.PI*2); ctx.fill(); }
+}
+class CryoShard extends Item{ constructor(){ super('Cryo Shard', true); this.color='#93c5fd'; }
+  use(by){ const pr=new Projectile(by.x+by.w/2, by.y+20, 700*by.dir, 0, by, 2*App.rules.ratio, 380); pr.onHit=(t)=>{ t.tHitstun=Math.max(t.tHitstun,0.8); t.buff.slow = Math.max(t.buff.slow||0, 2.5); }; projectiles.push(pr); }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,12,12); }
+}
+class TimeMine extends Item{ constructor(){ super('Time Mine', true); this.color='#eab308'; }
+  use(by){ const trap={x:this.x,y:this.y,w:20,h:20,t:3,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; const d=Math.hypot((tg.x+tg.w/2)-trap.x,(tg.y+tg.h/2)-trap.y); if(d<100){ tg.buff.slow=Math.max(tg.buff.slow||0, 0.2); }});},render:()=>{ctx.strokeStyle='#eab308'; ctx.strokeRect(trap.x,trap.y,trap.w,trap.h);} }; helpers.push(trap); }
+}
+class VoltaBomb extends Item{ constructor(){ super('Volta Bomb', true); this.color='#22c55e'; }
+  use(by){ radialHit(by, by.x+by.w/2, by.y+by.h/2, 120, 8*App.rules.ratio, 680); }
+}
+class PulseGrenade extends Item{ constructor(){ super('Pulse Grenade', true); this.color='#f87171'; }
+  use(by){ radialHit(by, by.x+by.w/2+40*by.dir, by.y+by.h/2, 130, 2*App.rules.ratio, 820); }
+}
+class GravityWell extends Item{ constructor(){ super('Gravity Well', true); this.color='#64748b'; }
+  use(by){ const trap={x:by.x+by.w/2+by.dir*20,y:by.y+by.h/2,w:14,h:14,t:5,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; const dx=trap.x-(tg.x+tg.w/2), dy=trap.y-(tg.y+tg.h/2); const d=Math.hypot(dx,dy); if(d<220){ tg.vx += (dx/d)*240*dt; tg.vy += (dy/d)*220*dt; }});},render:()=>{ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.arc(trap.x,trap.y,10,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
+}
+class DriftBarrel extends Item{ constructor(){ super('Drift Barrel', true); this.color='#f59e0b'; }
+  use(by){ by.vx = 1000*by.dir; by.vy = -200; if(App.rules.shake) shake(6,200); }
+}
+class LootCrate extends Item{ constructor(){ super('Loot Crate', true); this.color='#6b7280'; }
+  use(by){ if(Math.random()<0.15){ radialHit(by, by.x+by.w/2, by.y+by.h/2, 90, 6*App.rules.ratio, 600); } else { items.push(randomLoot()); } }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,20,16); }
+}
+class NanoCapsule extends Item{ constructor(){ super('Nano Capsule', true); this.color='#a3e635'; }
+  use(by){ if(Math.random()<0.5) items.push(new Heart()); else items.push(randomPowerUp()); }
+}
+class AuraFruit extends Item{ constructor(){ super('Aura Fruit', true); this.color='#34d399'; }
+  use(by){ by.damage = Math.max(0, by.damage - 25); }
+}
+class SteelShield extends Item{ constructor(){ super('Steel Shield', false); this.color='#94a3b8'; this.reduceKbFactor=0.7; this.speedMul=0.85; }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,20,24); }
+}
+class MirrorOrb extends Item{ constructor(){ super('Mirror Orb', true); this.color='#60a5fa'; this.reflective=true; }
+  use(by){ by.buff.reflect = Math.max(by.buff.reflect||0, 10); }
+}
+class WarpDice extends Item{ constructor(){ super('Warp Dice', true); this.color='#f472b6'; }
+  use(by){ const dx= (180+Math.random()*140)*by.dir; by.x = clamp(by.x+dx, 20, canvas.width-60); if(App.rules.shake) shake(3,120); }
+}
+class JetBoots extends Item{ constructor(){ super('Jet Boots', true); this.color='#22c55e'; }
+  use(by){ by.buff.jump = Math.max(by.buff.jump||0, 10); }
+}
+class ThunderRod extends Item{ constructor(){ super('Thunder Rod', false); this.color='#fbbf24'; }
+  onAttack(by,op){ addHitbox(by, -10, -80, by.w+20, 90, 4*App.rules.ratio, 520, 0, 0.08); }
+}
+class TornadoFan extends Item{ constructor(){ super('Tornado Fan', false); this.color='#a3a3a3'; }
+  use(by){ const trap={x:by.x+by.w/2,y:by.y+by.h/2,w:10,h:10,t:2,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(tg===by) return; const dx=(tg.x+tg.w/2)-trap.x, dy=(tg.y+tg.h/2)-trap.y; const d=Math.hypot(dx,dy); if(d<140){ tg.vx += (dx/d)*180*dt; tg.vy += (dy/d)*140*dt*0.4; }});},render:()=>{ctx.strokeStyle='#e5e7eb'; ctx.beginPath(); ctx.arc(trap.x,trap.y,14,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
+}
+class InfernoHammer extends Item{ constructor(){ super('Inferno Hammer', false); this.color='#ef4444'; this.speedMul=0.7; }
+  onAttack(by,op){ dashHit(by, by.w+80, by.h, 16*App.rules.ratio, 780, 0.22); }
+}
+class StarlightWand extends Item{ constructor(){ super('Starlight Wand', true); this.color='#d8b4fe'; }
+  use(by){ by.buff.special = Math.max(by.buff.special||0, 15); }
+}
+class KineticDisk extends Item{ constructor(){ super('Kinetic Disk', true); this.color='#38bdf8'; }
+  use(by){ const pr=new BouncyProjectile(by.x+by.w/2, by.y+20, 800*by.dir, -60, by, 5*App.rules.ratio, 520); pr.bounces=6; projectiles.push(pr); }
+}
+class ShadowSphere extends Item{ constructor(){ super('Shadow Sphere', true); this.color='#1f2937'; }
+  use(by){ by.buff.invis = Math.max(by.buff.invis||0, 6); }
+  draw(){ ctx.fillStyle='rgba(31,41,55,0.9)'; ctx.beginPath(); ctx.arc(this.x+10,this.y+10,9,0,Math.PI*2); ctx.fill(); }
+}
+class MagnetDrone extends Item{ constructor(){ super('Magnet Drone', true); this.color='#22d3ee'; }
+  use(by){ const drone={x:by.x,y:by.y,w:14,h:14,t:8,owner:by,update:(dt)=>{drone.t-=dt; if(drone.t<=0) drone.dead=true; items.forEach(it=>{ if(it===this) return; const dx=by.x - it.x, dy=by.y - it.y; const d=Math.hypot(dx,dy); if(d<300){ it.x += (dx/d)*160*dt; it.y += (dy/d)*160*dt; }});},render:()=>{ctx.strokeStyle='#22d3ee'; ctx.strokeRect(drone.x,drone.y,14,14);} }; helpers.push(drone); }
+}
+class MeteorHammer extends Item{ constructor(){ super('Meteor Hammer', false); this.color='#9ca3af'; this.speedMul=0.8; }
+  onAttack(by,op){ dashHit(by, by.w+90, by.h, 18*App.rules.ratio, 820, 0.24); }
+}
+class HealingRay extends Item{ constructor(){ super('Healing Ray', true); this.color='#86efac'; }
+  use(by){ by.buff.healingAura = Math.max(by.buff.healingAura||0, 6); }
+}
+class ChaosDice extends Item{ constructor(){ super('Chaos Dice', true); this.color='#f59e0b'; }
+  use(by){ const r=Math.random(); if(r<0.2){ by.buff.speed=8; } else if(r<0.4){ by.buff.damage=8; } else if(r<0.6){ by.buff.slow=3; } else if(r<0.8){ by.damage+=20; } else { by.buff.invuln=3; } }
+}
+class NovaCrown extends Item{ constructor(){ super('Nova Crown', true); this.color='#fde047'; }
+  use(by){ by.buff.invuln = Math.max(by.buff.invuln||0, 6); }
+}
+class CryoGrenade extends Item{ constructor(){ super('Cryo Grenade', true); this.color='#93c5fd'; }
+  use(by){ const pr=new Projectile(by.x+by.w/2,by.y+10, 520*by.dir, -80, by, 1*App.rules.ratio, 200); pr.onHit=(t)=>{ t.buff.slow=Math.max(t.buff.slow||0,2.0); t.tHitstun=Math.max(t.tHitstun,0.6); }; projectiles.push(pr); }
+}
+class WarpBlade extends Item{ constructor(){ super('Warp Blade', false); this.color='#a855f7'; }
+  onAttack(by,op){ by.x += 40*by.dir; dashHit(by, by.w+50, by.h-8, 8*App.rules.ratio, 660, 0.16); }
+}
+class BloomBomb extends Item{ constructor(){ super('Bloom Bomb', true); this.color='#f472b6'; }
+  use(by){ radialHit(by, by.x+by.w/2, by.y+by.h/2, 110, 1*App.rules.ratio, 200); if(p1) p1.tHitstun=Math.max(p1.tHitstun,0.8); if(p2) p2.tHitstun=Math.max(p2.tHitstun,0.8); }
+}
+class VortexDisk extends Item{ constructor(){ super('Vortex Disk', true); this.color='#64748b'; }
+  use(by){ const trap={x:by.x+by.w/2,y:by.y+by.h/2,w:12,h:12,t:4,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ const dx=trap.x-(tg.x+tg.w/2), dy=trap.y-(tg.y+tg.h/2); const d=Math.hypot(dx,dy); if(d<160){ tg.vx += (dx/d)*300*dt; tg.vy += (dy/d)*280*dt; }});},render:()=>{ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.arc(trap.x,trap.y,12,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
+}
+class SolarCore extends Item{ constructor(){ super('Solar Core', true); this.color='#facc15'; }
+  use(by){ by.buff.regen = Math.max(by.buff.regen||0, 12); }
+}
+class SpecterLantern extends Item{ constructor(){ super('Specter Lantern', true); this.color='#c084fc'; }
+  use(by,op){ for(let i=0;i<3;i++){ const h=new Helper(by, opponentOf(by)); h.timer=3; helpers.push(h); } }
+}
+class BlastBoots extends Item{ constructor(){ super('Blast Boots', true); this.color='#f87171'; }
+  use(by){ by.buff.rocket = Math.max(by.buff.rocket||0, 8); by.buff.speed = Math.max(by.buff.speed||0, 6); }
+}
+class EnergyCoil extends Item{ constructor(){ super('Energy Coil', false); this.color='#22d3ee'; }
+  use(by){ const pr=new BouncyProjectile(by.x+by.w/2,by.y+18, 500*by.dir, 0, by, 4*App.rules.ratio, 520); pr.bounces=4; pr.onHit=(t)=>{ pr.damage += 2*App.rules.ratio; }; projectiles.push(pr); }
+}
+class NovaRing extends Item{ constructor(){ super('Nova Ring', true); this.color='#fde047'; }
+  use(by){ radialHit(by, by.x+by.w/2+10*by.dir, by.y+by.h/2, 140, 3*App.rules.ratio, 720); }
+}
+class ArcCrystal extends Item{ constructor(){ super('Arc Crystal', true); this.color='#60a5fa'; }
+  use(by){ by.buff.damage = Math.max(by.buff.damage||0, 10); }
+}
+class PhaseCloak extends Item{ constructor(){ super('Phase Cloak', true); this.color='#94a3b8'; }
+  use(by){ by.buff.phase = 1; }
+}
+
+function randomLoot(){
+  const arr=[NovaCore, EchoBeacon, ShockBlade, MeteorGauntlet, PhotonBlaster, PlasmaLauncher, EmberFlower, CryoShard, TimeMine, VoltaBomb, PulseGrenade, GravityWell, DriftBarrel, LootCrate, NanoCapsule, AuraFruit, SteelShield, MirrorOrb, WarpDice, JetBoots, ThunderRod, TornadoFan, InfernoHammer, StarlightWand, KineticDisk, ShadowSphere, MagnetDrone, MeteorHammer, HealingRay, ChaosDice, NovaCrown, CryoGrenade, WarpBlade, BloomBomb, VortexDisk, SolarCore, SpecterLantern, BlastBoots, EnergyCoil, NovaRing, ArcCrystal, PhaseCloak];
+  const C = arr[Math.floor(Math.random()*arr.length)]; return new C();
+}
 function spawnRandomItem(){
   const roll=Math.random();
-  if(App.rules.powerUpsOn && roll<0.34){ items.push(randomPowerUp()); return; }
-  if(roll<.57) items.push(new Heart()); else if(roll<.85) items.push(new Bomb()); else items.push(new AssistTrophy());
+  if(App.rules.powerUpsOn && roll<0.25){ items.push(randomPowerUp()); return; }
+  if(roll<0.6){ items.push(randomLoot()); return; }
+  if(roll<0.78) items.push(new Heart()); else if(roll<0.9) items.push(new Bomb()); else items.push(new AssistTrophy());
 }
 
 // ==== Controls ====
@@ -1111,8 +1291,22 @@ function frame(dt){
 
   for(const pr of projectiles){
     pr.update(dt);
-    if(collide(pr,p1)&&pr.owner!==p1){ hit(pr.owner,p1,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true;}
-    if(collide(pr,p2)&&pr.owner!==p2){ hit(pr.owner,p2,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true; }
+    if(collide(pr,p1)&&pr.owner!==p1){
+      if ((p1.buff && p1.buff.reflect>0) || (p1.holding && p1.holding.reflective)){
+        pr.owner = p1; pr.vx *= -1; pr.vy *= -0.5;
+      } else {
+        if (typeof pr.onHit === 'function') { try{ pr.onHit(p1); }catch{} }
+        hit(pr.owner,p1,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true;
+      }
+    }
+    if(collide(pr,p2)&&pr.owner!==p2){
+      if ((p2.buff && p2.buff.reflect>0) || (p2.holding && p2.holding.reflective)){
+        pr.owner = p2; pr.vx *= -1; pr.vy *= -0.5;
+      } else {
+        if (typeof pr.onHit === 'function') { try{ pr.onHit(p2); }catch{} }
+        hit(pr.owner,p2,pr.damage,pr.kb*sign(pr.vx)); pr.dead=true;
+      }
+    }
   }
   for(const h of helpers){ h.update(dt); }
   for(const s of sparks){ s.t-=dt; } 
@@ -1182,7 +1376,17 @@ document.getElementById('spawnItem')?.addEventListener('click', function(){ spaw
 function spawnMenu(){
   const old = $('#pause .panel .spawnGrid'); if(old) old.remove();
   const grid = document.createElement('div'); grid.className='grid auto gap spawnGrid'; grid.style.marginTop='10px';
-  [{n:'Heart',c:()=>items.push(new Heart())},{n:'Bomb',c:()=>items.push(new Bomb())},{n:'Assist Trophy',c:()=>items.push(new AssistTrophy())}]
+  [
+    {n:'Heart',c:()=>items.push(new Heart())},
+    {n:'Bomb',c:()=>items.push(new Bomb())},
+    {n:'Assist Trophy',c:()=>items.push(new AssistTrophy())},
+    {n:'Nova Core',c:()=>items.push(new NovaCore())},
+    {n:'Echo Beacon',c:()=>items.push(new EchoBeacon())},
+    {n:'Photon Blaster',c:()=>items.push(new PhotonBlaster())},
+    {n:'Steel Shield',c:()=>items.push(new SteelShield())},
+    {n:'Gravity Well',c:()=>items.push(new GravityWell())},
+    {n:'Loot Crate',c:()=>items.push(new LootCrate())}
+  ]
     .forEach(o=>{const it=document.createElement('div'); it.className='item'; it.textContent=o.n; it.onclick=()=>{o.c(); grid.remove();}; grid.appendChild(it);});
   document.querySelector('#pause .panel')?.appendChild(grid);
 }
