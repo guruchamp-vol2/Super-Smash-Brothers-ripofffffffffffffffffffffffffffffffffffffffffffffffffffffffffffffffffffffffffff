@@ -1719,3 +1719,336 @@ window.Smashlike = {
   addCharacter(c){ CHARACTERS.push(c); },
   addMusic(t){ MUSIC.push(t); },
 };
+/**
+ * smashlike-extended-moves.js
+ * Drop this after your main game script. It:
+ *  1) Adds `up`/`down` flags to controls.
+ *  2) Extends Fighter.attack / Fighter.special so they dispatch to per-variant moves:
+ *       moves.attack.{side,up,down,aerial} and moves.special.{side,up,down,aerial}
+ *     (Falls back to your existing simple attack/special if a variant isn't provided.)
+ *  3) Assigns themed movesets to a bunch of characters (base 4 + Sonic crew + UT/DR picks).
+ *
+ * Nothing in the base file needs to be edited—this file monkey-patches at runtime.
+ */
+(function(){
+  if (typeof window === "undefined") return;
+
+  const Smashlike = window.Smashlike || {};
+  const projectiles = window.projectiles || (window.projectiles = []);
+  const App = window.App || { rules: { ratio: 1 } };
+  const controlsP1 = window.controlsP1 || (window.controlsP1 = {});
+  const controlsP2 = window.controlsP2 || (window.controlsP2 = {});
+
+  // --- add up/down to control sampling (wrap updateControls) ---
+  const _origUpdateControls = window.updateControls;
+  window.updateControls = function(){
+    if (_origUpdateControls) _origUpdateControls();
+    if (typeof controlsP1.up === "undefined") { controlsP1.up = false; controlsP1.down = false; }
+    if (typeof controlsP2.up === "undefined") { controlsP2.up = false; controlsP2.down = false; }
+    try{
+      const keys = window.keys || {};
+      controlsP1.up   = !!keys["w"];
+      controlsP1.down = !!keys["s"];
+      controlsP2.up   = !!(keys["ArrowUp"] || keys["0"]);
+      controlsP2.down = !!keys["ArrowDown"];
+    }catch(e){}
+  };
+
+  const sign = (v)=> (v<0?-1:1);
+  function variantFrom(self, controls){
+    if (!self.onGround) return 'aerial';
+    if (controls && controls.up)   return 'up';
+    if (controls && controls.down) return 'down';
+    return 'side';
+  }
+
+  const CHAR = window.CHARACTERS || [];
+  function getChar(id){ return CHAR.find(c=>c.id===id); }
+  function setMoves(id, config){
+    const c = getChar(id);
+    if (!c) return;
+    c.moves = c.moves || {};
+    if (config.attack) c.moves.attack = config.attack;
+    if (config.special) c.moves.special = config.special;
+    if (config.anim) c.anim = config.anim;
+  }
+
+  const F = window.Fighter;
+  if (!F) { console.warn("[extended-moves] Fighter not found yet; load this after the main script."); return; }
+
+  // --- default fallbacks (approximate your base logic) ---
+  function defaultAttack(self, op){
+    if(self._cooldown&&self._cooldown>0) return; self._cooldown=0.25; self.tAttack=0.28;
+    if (self.holding && typeof self.holding.onAttack === 'function'){ self.holding.onAttack(self, op); return; }
+    const power=self.spec && self.spec.kit==='heavy'?(12+Math.random()*6):(8+Math.random()*4);
+    const kb=self.spec && self.spec.kit==='heavy'?600:520;
+    const hit = (window.hit||function(){});
+    if(op && Math.abs(self.x-op.x)<80 && Math.abs(self.y-op.y)<60){ hit(self,op,power*App.rules.ratio,kb*sign(self.dir||1)); }
+  }
+  function defaultSpecial(self, op){
+    if(self._scd&&self._scd>0) return; self._scd=.8; self.tSpecial=0.5;
+    if (self.holding && typeof self.holding.onSpecial === 'function'){ self.holding.onSpecial(self, op); return; }
+    const Projectile = window.Projectile || function(){};
+    const spd=420*(self.spec?.stats?.speed||1)*sign(self.dir||1);
+    projectiles.push(new Projectile((self.x||0)+(self.w||0)/2,(self.y||0)+20,spd,0,self,6*App.rules.ratio,520));
+  }
+
+  // snapshot controls each update so attack/special can pick a variant
+  const _origUpdate = F.prototype.update;
+  F.prototype.update = function(dt, controls){
+    this._controlsSnapshot = controls ? JSON.parse(JSON.stringify(controls)) : null;
+    return _origUpdate ? _origUpdate.apply(this, arguments) : undefined;
+  };
+
+  // variant-aware attack/special
+  F.prototype.attack = function(op){
+    const controls = this._controlsSnapshot || {};
+    if(this._cooldown && this._cooldown>0) return;
+    this._cooldown=0.25; this.tAttack=0.28;
+    const mv = this.spec?.moves?.attack;
+    const key = variantFrom(this, controls);
+    if (mv && typeof mv === 'object' && typeof mv[key] === 'function') return mv[key](this, op);
+    if (typeof mv === 'function') return mv(this, op);
+    if (this.holding && typeof this.holding.onAttack === 'function') return this.holding.onAttack(this, op);
+    return defaultAttack(this, op);
+  };
+
+  F.prototype.special = function(op){
+    const controls = this._controlsSnapshot || {};
+    if(this._scd && this._scd>0) return;
+    this._scd=.8; this.tSpecial=0.5;
+    const mv = this.spec?.moves?.special;
+    const key = variantFrom(this, controls);
+    if (mv && typeof mv === 'object' && typeof mv[key] === 'function') return mv[key](this, op);
+    if (typeof mv === 'function') return mv(this, op);
+    if (this.holding && typeof this.holding.onSpecial === 'function') return this.holding.onSpecial(this, op);
+    return defaultSpecial(this, op);
+  };
+
+  // --- helper hooks from your game (be tolerant if absent) ---
+  const dashHit = window.dashHit || function(){};
+  const fireFan = window.fireFan || function(){};
+  const addHitbox = window.addHitbox || function(){};
+  const shake = window.shake || function(){};
+  const BouncyProjectile = window.BouncyProjectile || function(){};
+
+  // simple anim maps (optional)
+  const fastAnim  = { attack:[12,20], special:[12,20], run:[10,22] };
+  const heavyAnim = { attack:[10,14], special:[10,14], run:[8,14]  };
+  const magicAnim = { attack:[12,16], special:[14,18], run:[8,16]  };
+
+  // ======== Character-themed movesets (examples) ========
+  // Base archetypes
+  setMoves('bruiser', {
+    anim: heavyAnim,
+    attack: {
+      side:   (s,o)=>{ dashHit(s, s.w+42, s.h, 10, 660, 0.16); shake(4,180); },
+      up:     (s,o)=>{ addHitbox(s,-10,-80,s.w+20,80, 8*App.rules.ratio,600,0, .14); },
+      down:   (s,o)=>{ addHitbox(s,-16,s.h-18,s.w+64,24, 12*App.rules.ratio,720,0, .16); shake(6,200); },
+      aerial: (s,o)=>{ dashHit(s, s.w+34, s.h-10, 9, 600, 0.14); }
+    },
+    special: {
+      side:   (s,o)=>{ s._scd=1.0; s.tSpecial=.5; dashHit(s, s.w+70, s.h, 14, 720, 0.20); shake(8,260); },
+      up:     (s,o)=>{ s._scd=1.1; s.tSpecial=.55; s.vy = -720; addHitbox(s,-6,-80,s.w+12,90, 10*App.rules.ratio, 520, -100, .20); },
+      down:   (s,o)=>{ s._scd=1.2; s.tSpecial=.6; addHitbox(s,-20,s.h-24,s.w+70,28, 16*App.rules.ratio,760,0,.2); shake(10,300); },
+      aerial: (s,o)=>{ s._scd=.9; s.tSpecial=.45; addHitbox(s,-14,s.h-14,s.w+42,20, 11*App.rules.ratio,640,0,.14); }
+    }
+  });
+
+  setMoves('ninja', {
+    anim: fastAnim,
+    attack: {
+      side:   (s,o)=>{ dashHit(s, s.w+28, s.h-10, 7, 560, 0.12); },
+      up:     (s,o)=>{ addHitbox(s, -6, -84, s.w+12, 84, 6*App.rules.ratio, 540, 0, .10); },
+      down:   (s,o)=>{ addHitbox(s, -4, s.h-8, s.w+8, 18, 8*App.rules.ratio, 620, 0, .10); },
+      aerial: (s,o)=>{ dashHit(s, s.w+60, s.h-8, 8, 600, 0.12); }
+    },
+    special: {
+      side:   (s,o)=>{ s._scd=.9; s.tSpecial=.45; s.vx = 980*(s.dir||1); dashHit(s, s.w+72, s.h-8, 10, 660, 0.18); },
+      up:     (s,o)=>{ s._scd=1.0; s.tSpecial=.5; s.vy=-840; addHitbox(s,-8,-90,s.w+16,90,9*App.rules.ratio,520,0,.18); },
+      down:   (s,o)=>{ s._scd=1.0; s.tSpecial=.5; addHitbox(s,-60,-12,120,30,7*App.rules.ratio,520,0,.12); },
+      aerial: (s,o)=>{ s._scd=.9; s.tSpecial=.45; addHitbox(s,-10,s.h-14,s.w+20,16,9*App.rules.ratio,600,0,.12); }
+    }
+  });
+
+  setMoves('gunner', {
+    anim: { attack:[12,18], special:[12,20], run:[12,18] },
+    attack: {
+      side:   (s,o)=>{ const P=window.Projectile; if(!P) return; projectiles.push(new P(s.x+s.w/2, s.y+20, 640*(s.dir||1), 0, s, 5*App.rules.ratio, 520)); },
+      up:     (s,o)=>{ const P=window.Projectile; if(!P) return; projectiles.push(new P(s.x+s.w/2, s.y+10, 0, -700, s, 4*App.rules.ratio, 480)); },
+      down:   (s,o)=>{ fireFan(s, 2, 18, 560, 4); },
+      aerial: (s,o)=>{ const P=window.Projectile; if(!P) return; projectiles.push(new P(s.x+s.w/2, s.y+22, 720*(s.dir||1), 40, s, 5*App.rules.ratio, 520)); }
+    },
+    special: {
+      side:   (s,o)=>{ s._scd=.85; s.tSpecial=.45; fireFan(s, 3, 10, 600, 5); },
+      up:     (s,o)=>{ s._scd=1.0; s.tSpecial=.5; fireFan(s, 5, 60, 540, 4); },
+      down:   (s,o)=>{ s._scd=1.0; s.tSpecial=.5; const P=window.Projectile; if(!P) return; const pr=new P(s.x+s.w/2,s.y+20, 520*(s.dir||1), 0, s, 2*App.rules.ratio, 280); pr.onHit=(t)=>{ t.buff=t.buff||{}; t.buff.slow=Math.max(t.buff.slow||0,1.5); }; projectiles.push(pr); },
+      aerial: (s,o)=>{ s._scd=.9; s.tSpecial=.45; fireFan(s, 4, 24, 620, 4); }
+    }
+  });
+
+  setMoves('mage', {
+    anim: magicAnim,
+    attack: {
+      side:   (s,o)=>{ fireFan(s, 3, 30, 460, 4); },
+      up:     (s,o)=>{ fireFan(s, 4, 80, 440, 3); },
+      down:   (s,o)=>{ const P=window.Projectile; if(!P) return; const pr=new P(s.x+s.w/2, s.y+18, 520*(s.dir||1), 0, s, 2*App.rules.ratio, 320); pr.onHit=(t)=>{ t.buff=t.buff||{}; t.buff.slow=Math.max(t.buff.slow||0,1.6); }; projectiles.push(pr); },
+      aerial: (s,o)=>{ fireFan(s, 3, 20, 500, 4); }
+    },
+    special: {
+      side:   (s,o)=>{ s._scd=1.0; s.tSpecial=.5; const P=window.Projectile; if(!P) return; const pr=new P(s.x+s.w/2, s.y+18, 540*(s.dir||1), -30, s, 7*App.rules.ratio, 520); pr.onHit=(t)=>{ t.tHitstun=Math.max(t.tHitstun||0,0.6); t.buff=t.buff||{}; t.buff.slow=Math.max(t.buff.slow||0,2.0); }; projectiles.push(pr); },
+      up:     (s,o)=>{ s._scd=1.1; s.tSpecial=.55; fireFan(s, 6, 100, 520, 4); },
+      down:   (s,o)=>{ s._scd=1.1; s.tSpecial=.55; addHitbox(s,-18,s.h-22,s.w+36,20,10*App.rules.ratio,540,0,.16); },
+      aerial: (s,o)=>{ s._scd=1.0; s.tSpecial=.5; fireFan(s, 5, 60, 560, 4); }
+    }
+  });
+
+  // Sonic crew
+  setMoves('sonic', {
+    attack: {
+      side:(s,o)=>{ dashHit(s, s.w+46, s.h-10, 7, 600, 0.16); },
+      up:(s,o)=>{ s.vy=-900; addHitbox(s,-8,-90,s.w+16,90,8*App.rules.ratio,600,0,.16); },
+      down:(s,o)=>{ addHitbox(s,-50,-10,100,26,8*App.rules.ratio,600,0,.12); },
+      aerial:(s,o)=>{ dashHit(s, s.w+70, s.h-8, 8, 620, 0.14); }
+    },
+    special: {
+      side:(s,o)=>{ s._scd=.9; s.tSpecial=.45; s.vx = 1000*(s.dir||1); dashHit(s, s.w+80, s.h-8, 10, 660, 0.18); },
+      up:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; s.vy = -960; addHitbox(s,-8,-100,s.w+16,100,10*App.rules.ratio,680,0,.2); },
+      down:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; addHitbox(s,-60,-12,120,32,9*App.rules.ratio,640,0,.16); },
+      aerial:(s,o)=>{ s._scd=.9; s.tSpecial=.45; dashHit(s, s.w+90, s.h-8, 11, 680, 0.18); }
+    }
+  });
+
+  setMoves('tails', {
+    attack: { side:(s,o)=>fireFan(s,2,20,420,5), up:(s,o)=>fireFan(s,3,40,440,5), down:(s,o)=>fireFan(s,2,16,420,4), aerial:(s,o)=>fireFan(s,2,24,460,5) },
+    special:{ side:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; fireFan(s,3,40,520,6); },
+              up:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; s.vy=-800; fireFan(s,4,60,520,5); },
+              down:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; fireFan(s,6,70,500,4); },
+              aerial:(s,o)=>{ s._scd=.95; s.tSpecial=.48; fireFan(s,4,50,540,5); } }
+  });
+
+  setMoves('knuckles', {
+    attack: { side:(s,o)=>dashHit(s,s.w+30,s.h-10,10,640,0.14),
+             up:(s,o)=>addHitbox(s,-10,-86,s.w+20,86,10*App.rules.ratio,620,0,.16),
+             down:(s,o)=>addHitbox(s,-18,s.h-18,s.w+36,22,11*App.rules.ratio,660,0,.16),
+             aerial:(s,o)=>dashHit(s,s.w+40,s.h-8,9,620,0.14)
+    },
+    special: { side:(s,o)=>{ s._scd=1.1; s.tSpecial=.5; addHitbox(s,-20,s.h-24,s.w+40,28,14*App.rules.ratio,700,0,.18); shake(6,250); },
+               up:(s,o)=>{ s._scd=1.2; s.tSpecial=.55; s.vy=-840; addHitbox(s,-8,-96,s.w+16,96,12*App.rules.ratio,700,0,.2); },
+               down:(s,o)=>{ s._scd=1.2; s.tSpecial=.55; addHitbox(s,-24,s.h-20,s.w+60,30,16*App.rules.ratio,760,0,.2); },
+               aerial:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; dashHit(s,s.w+80,s.h,12,680,0.18); } }
+  });
+
+  setMoves('amy', {
+    attack: { side:(s,o)=>dashHit(s,s.w+50,s.h-8,9,600,0.16),
+             up:(s,o)=>addHitbox(s,-6,-84,s.w+12,84,8*App.rules.ratio,560,0,.14),
+             down:(s,o)=>addHitbox(s,-18,s.h-16,s.w+36,22,10*App.rules.ratio,620,0,.14),
+             aerial:(s,o)=>dashHit(s,s.w+64,s.h,10,640,0.16) },
+    special:{ side:(s,o)=>{ s._scd=1.0; s.tSpecial=.6; dashHit(s,s.w+70,s.h,12,650,0.2); },
+              up:(s,o)=>{ s._scd=1.1; s.tSpecial=.55; s.vy=-820; addHitbox(s,-8,-92,s.w+16,92,11*App.rules.ratio,640,0,.18); },
+              down:(s,o)=>{ s._scd=1.1; s.tSpecial=.55; addHitbox(s,-28,s.h-18,s.w+56,24,14*App.rules.ratio,680,0,.18); },
+              aerial:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; dashHit(s,s.w+80,s.h,12,660,0.18); } }
+  });
+
+  setMoves('shadow', {
+    attack: { side:(s,o)=>dashHit(s,s.w+40,s.h-8,8,600,0.14),
+             up:(s,o)=>addHitbox(s,-6,-90,s.w+12,90,9*App.rules.ratio,620,0,.16),
+             down:(s,o)=>addHitbox(s,-50,-8,100,24,8*App.rules.ratio,620,0,.12),
+             aerial:(s,o)=>dashHit(s,s.w+70,s.h-10,10,640,0.16) },
+    special:{ side:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; s.vx=1000*(s.dir||1); dashHit(s,s.w+90,s.h-10,11,680,0.18); },
+              up:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; s.vy=-920; addHitbox(s,-8,-96,s.w+16,96,11*App.rules.ratio,660,0,.2); },
+              down:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; addHitbox(s,-64,-10,128,28,10*App.rules.ratio,660,0,.16); },
+              aerial:(s,o)=>{ s._scd=.95; s.tSpecial=.48; dashHit(s,s.w+96,s.h-8,11,700,0.2); } }
+  });
+
+  // Undertale + Deltarune
+  setMoves('frisk', {
+    attack:  { side:(s,o)=>dashHit(s,s.w+28,s.h-10,8,560,0.14),
+               up:(s,o)=>addHitbox(s,-6,-78,s.w+12,78,7*App.rules.ratio,540,0,.12),
+               down:(s,o)=>addHitbox(s,-6,s.h-8,s.w+12,18,8*App.rules.ratio,580,0,.12),
+               aerial:(s,o)=>dashHit(s,s.w+36,s.h-8,8,560,0.14) },
+    special: { side:(s,o)=>fireFan(s,3,20,500,6),
+               up:(s,o)=>fireFan(s,5,70,520,5),
+               down:(s,o)=>{ const P=window.Projectile; if(!P) return; const pr=new P(s.x+s.w/2,s.y+18,540*(s.dir||1),0,s,2*App.rules.ratio,320); pr.onHit=(t)=>{ t.buff=t.buff||{}; t.buff.slow=Math.max(t.buff.slow||0,1.5); }; projectiles.push(pr); },
+               aerial:(s,o)=>fireFan(s,4,30,540,5) }
+  });
+
+  setMoves('sans', {
+    attack:  { side:(s,o)=>dashHit(s,s.w+22,s.h-10,7,520,0.12),
+               up:(s,o)=>fireFan(s,3,50,520,4),
+               down:(s,o)=>fireFan(s,2,26,500,4),
+               aerial:(s,o)=>fireFan(s,4,24,560,4) },
+    special: { side:(s,o)=>fireFan(s,6,30,560,4),
+               up:(s,o)=>fireFan(s,8,90,540,4),
+               down:(s,o)=>{ const P=window.Projectile; if(!P) return; const pr=new P(s.x+s.w/2,s.y+20,560*(s.dir||1),0,s,2*App.rules.ratio,280); pr.onHit=(t)=>{ t.buff=t.buff||{}; t.buff.slow=Math.max(t.buff.slow||0,1.8); }; projectiles.push(pr); },
+               aerial:(s,o)=>fireFan(s,6,60,560,4) }
+  });
+
+  setMoves('undyne', {
+    attack:  { side:(s,o)=>dashHit(s,s.w+34,s.h-8,9,600,0.14),
+               up:(s,o)=>fireFan(s,3,20,640,6),
+               down:(s,o)=>addHitbox(s,-12,s.h-16,s.w+24,20,10*App.rules.ratio,620,0,.14),
+               aerial:(s,o)=>dashHit(s,s.w+44,s.h-8,9,620,0.14) },
+    special: { side:(s,o)=>fireFan(s,5,20,640,6),
+               up:(s,o)=>fireFan(s,7,80,600,5),
+               down:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; addHitbox(s,-24,s.h-18,s.w+48,26,14*App.rules.ratio,680,0,.18); },
+               aerial:(s,o)=>fireFan(s,6,40,640,5) }
+  });
+
+  setMoves('kris', {
+    attack:  { side:(s,o)=>dashHit(s,s.w+30,s.h-8,8,600,0.14),
+               up:(s,o)=>addHitbox(s,-8,-86,s.w+16,86,8*App.rules.ratio,580,0,.14),
+               down:(s,o)=>addHitbox(s,-8,s.h-10,s.w+16,20,9*App.rules.ratio,600,0,.14),
+               aerial:(s,o)=>dashHit(s,s.w+42,s.h-8,9,620,0.14) },
+    special: { side:(s,o)=>dashHit(s,s.w+70,s.h-8,10,640,0.18),
+               up:(s,o)=>{ s.vy=-820; addHitbox(s,-8,-92,s.w+16,92,10*App.rules.ratio,640,0,.18); },
+               down:(s,o)=>{ addHitbox(s,-20,s.h-16,s.w+40,24,12*App.rules.ratio,680,0,.18); },
+               aerial:(s,o)=>dashHit(s,s.w+80,s.h-8,11,660,0.2) }
+  });
+
+  setMoves('susie', {
+    attack:  { side:(s,o)=>dashHit(s,s.w+46,s.h,10,660,0.16),
+               up:(s,o)=>addHitbox(s,-12,-90,s.w+24,90,10*App.rules.ratio,620,0,.18),
+               down:(s,o)=>addHitbox(s,-18,s.h-18,s.w+36,22,12*App.rules.ratio,660,0,.16),
+               aerial:(s,o)=>dashHit(s,s.w+58,s.h,10,680,0.18) },
+    special: { side:(s,o)=>{ s._scd=1.1; s.tSpecial=.5; dashHit(s, s.w+80, s.h, 13, 700, 0.2); },
+               up:(s,o)=>{ s._scd=1.2; s.tSpecial=.55; s.vy=-860; addHitbox(s,-10,-96,s.w+20,96,12*App.rules.ratio,700,0,.2); },
+               down:(s,o)=>{ s._scd=1.2; s.tSpecial=.55; addHitbox(s,-24,s.h-20,s.w+60,30,16*App.rules.ratio,760,0,.2); },
+               aerial:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; dashHit(s,s.w+90,s.h,12,700,0.2); } }
+  });
+
+  setMoves('ralsei', {
+    attack:  { side:(s,o)=>dashHit(s,s.w+24,s.h-10,7,540,0.14),
+               up:(s,o)=>fireFan(s,4,60,520,5),
+               down:(s,o)=>addHitbox(s,-10,s.h-14,s.w+20,20,9*App.rules.ratio,600,0,.14),
+               aerial:(s,o)=>fireFan(s,3,30,540,5) },
+    special: { side:(s,o)=>fireFan(s,4,50,520,6),
+               up:(s,o)=>fireFan(s,6,90,520,5),
+               down:(s,o)=>{ s._scd=1.0; s.tSpecial=.5; addHitbox(s,-18,s.h-18,s.w+36,24,10*App.rules.ratio,620,0,.16); },
+               aerial:(s,o)=>fireFan(s,5,60,560,5) }
+  });
+
+  setMoves('jevil', {
+    attack:  { side:(s,o)=>{ const P=BouncyProjectile; if(!P) return; const vx=600*(s.dir||1); projectiles.push(new P(s.x+s.w/2,s.y+20,vx,-80,s,6*App.rules.ratio,520)); },
+               up:(s,o)=>{ const P=BouncyProjectile; if(!P) return; const vx=520*(s.dir||1); projectiles.push(new P(s.x+s.w/2,s.y+20, vx,-200,s,6*App.rules.ratio,520)); },
+               down:(s,o)=>{ const P=BouncyProjectile; if(!P) return; const vx=520*(s.dir||1); projectiles.push(new P(s.x+s.w/2,s.y+20, vx, 200,s,6*App.rules.ratio,520)); },
+               aerial:(s,o)=>{ const P=BouncyProjectile; if(!P) return; const vx=680*(s.dir||1); projectiles.push(new P(s.x+s.w/2,s.y+18, vx,-140,s,7*App.rules.ratio,540)); } },
+    special: { side:(s,o)=>{ const P=BouncyProjectile; if(!P) return; projectiles.push(new P(s.x+s.w/2,s.y+20,520*(s.dir||1),-200,s,7*App.rules.ratio,540)); projectiles.push(new P(s.x+s.w/2,s.y+20,-520*(s.dir||1),-120,s,7*App.rules.ratio,540)); },
+               up:(s,o)=>{ fireFan(s,7,120,560,4); },
+               down:(s,o)=>{ addHitbox(s,-60, -10, 120, 28, 10*App.rules.ratio, 700, 0, .16); },
+               aerial:(s,o)=>{ fireFan(s,8,100,600,4); } }
+  });
+
+  setMoves('spamton', {
+    attack:  { side:(s,o)=>fireFan(s,3,24,540,4),
+               up:(s,o)=>fireFan(s,4,60,540,4),
+               down:(s,o)=>fireFan(s,2,20,520,4),
+               aerial:(s,o)=>fireFan(s,5,40,560,4) },
+    special: { side:(s,o)=>fireFan(s,6,60,580,4),
+               up:(s,o)=>fireFan(s,8,100,560,4),
+               down:(s,o)=>{ const P=window.Projectile; if(!P) return; const pr=new P(s.x+s.w/2,s.y+20, 560*(s.dir||1), 0, s, 1*App.rules.ratio, 240); pr.onHit=(t)=>{ t.buff=t.buff||{}; t.buff.slow=Math.max(t.buff.slow||0,1.4); }; projectiles.push(pr); },
+               aerial:(s,o)=>fireFan(s,6,80,580,4) }
+  });
+
+  console.log('[smashlike-extended-moves] loaded: directional specials & aerial variants enabled.');
+})();
