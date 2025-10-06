@@ -426,7 +426,7 @@ el = $('#btnRandom');               if (el) el.addEventListener('click', ()=> { 
 el = $('#onlineGoSelect');          if (el) el.addEventListener('click', ()=> { if(!Online.active){ onlineStatus('Create/join a room or match first.'); return;} buildCharacterSelect(); Screens.show('#chars'); });
 
 // Generic handler for all mode buttons
-$('.mode-btn').forEach(btn=>{
+$$('.mode-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     const m = btn.getAttribute('data-mode')||'stock';
     App.mode = m;
