@@ -1050,7 +1050,7 @@ class CryoShard extends Item{ constructor(){ super('Cryo Shard', true); this.col
   draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,12,12); }
 }
 class TimeMine extends Item{ constructor(){ super('Time Mine', true); this.color='#eab308'; }
-  use(by){ const trap={x:this.x,y:this.y,w:20,h:20,t:3,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; const d=Math.hypot((tg.x+tg.w/2)-trap.x,(tg.y+tg.h/2)-trap.y); if(d<100){ tg.buff.slow=Math.max(tg.buff.slow||0, 0.2); }});},render:()=>{ctx.strokeStyle='#eab308'; ctx.strokeRect(trap.x,trap.y,trap.w,trap.h);} }; helpers.push(trap); }
+  use(by){ const trap={x:this.x,y:this.y,w:20,h:20,t:3,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; if(tg===trap.owner) return; const d=Math.hypot((tg.x+tg.w/2)-trap.x,(tg.y+tg.h/2)-trap.y); if(d<100){ tg.buff.slow=Math.max(tg.buff.slow||0, 0.2); }});},render:()=>{ctx.strokeStyle='#eab308'; ctx.strokeRect(trap.x,trap.y,trap.w,trap.h);} }; helpers.push(trap); }
 }
 class VoltaBomb extends Item{ constructor(){ super('Volta Bomb', true); this.color='#22c55e'; }
   use(by){ radialHit(by, by.x+by.w/2, by.y+by.h/2, 120, 8*App.rules.ratio, 680); }
@@ -1059,7 +1059,7 @@ class PulseGrenade extends Item{ constructor(){ super('Pulse Grenade', true); th
   use(by){ radialHit(by, by.x+by.w/2+40*by.dir, by.y+by.h/2, 130, 2*App.rules.ratio, 820); }
 }
 class GravityWell extends Item{ constructor(){ super('Gravity Well', true); this.color='#64748b'; }
-  use(by){ const trap={x:by.x+by.w/2+by.dir*20,y:by.y+by.h/2,w:14,h:14,t:5,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; const dx=trap.x-(tg.x+tg.w/2), dy=trap.y-(tg.y+tg.h/2); const d=Math.hypot(dx,dy); if(d<220){ tg.vx += (dx/d)*240*dt; tg.vy += (dy/d)*220*dt; }});},render:()=>{ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.arc(trap.x,trap.y,10,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
+  use(by){ const trap={x:by.x+by.w/2+by.dir*20,y:by.y+by.h/2,w:14,h:14,t:5,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; if(tg===trap.owner) return; const dx=trap.x-(tg.x+tg.w/2), dy=trap.y-(tg.y+tg.h/2); const d=Math.hypot(dx,dy); if(d<220){ tg.vx += (dx/d)*240*dt; tg.vy += (dy/d)*220*dt; }});},render:()=>{ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.arc(trap.x,trap.y,10,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
 }
 class DriftBarrel extends Item{ constructor(){ super('Drift Barrel', true); this.color='#f59e0b'; }
   use(by){ by.vx = 1000*by.dir; by.vy = -200; if(App.rules.shake) shake(6,200); }
@@ -1090,7 +1090,7 @@ class ThunderRod extends Item{ constructor(){ super('Thunder Rod', false); this.
   onAttack(by,op){ addHitbox(by, -10, -80, by.w+20, 90, 4*App.rules.ratio, 520, 0, 0.08); }
 }
 class TornadoFan extends Item{ constructor(){ super('Tornado Fan', false); this.color='#a3a3a3'; }
-  use(by){ const trap={x:by.x+by.w/2,y:by.y+by.h/2,w:10,h:10,t:2,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(tg===by) return; const dx=(tg.x+tg.w/2)-trap.x, dy=(tg.y+tg.h/2)-trap.y; const d=Math.hypot(dx,dy); if(d<140){ tg.vx += (dx/d)*180*dt; tg.vy += (dy/d)*140*dt*0.4; }});},render:()=>{ctx.strokeStyle='#e5e7eb'; ctx.beginPath(); ctx.arc(trap.x,trap.y,14,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
+  use(by){ const trap={x:by.x+by.w/2,y:by.y+by.h/2,w:10,h:10,t:2,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; if(tg===trap.owner) return; const dx=(tg.x+tg.w/2)-trap.x, dy=(tg.y+tg.h/2)-trap.y; const d=Math.hypot(dx,dy); if(d<140){ tg.vx += (dx/d)*180*dt; tg.vy += (dy/d)*140*dt*0.4; }});},render:()=>{ctx.strokeStyle='#e5e7eb'; ctx.beginPath(); ctx.arc(trap.x,trap.y,14,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
 }
 class InfernoHammer extends Item{ constructor(){ super('Inferno Hammer', false); this.color='#ef4444'; this.speedMul=0.7; }
   onAttack(by,op){ dashHit(by, by.w+80, by.h, 16*App.rules.ratio, 780, 0.22); }
@@ -1130,7 +1130,7 @@ class BloomBomb extends Item{ constructor(){ super('Bloom Bomb', true); this.col
   use(by){ radialHit(by, by.x+by.w/2, by.y+by.h/2, 110, 1*App.rules.ratio, 200); if(p1) p1.tHitstun=Math.max(p1.tHitstun,0.8); if(p2) p2.tHitstun=Math.max(p2.tHitstun,0.8); }
 }
 class VortexDisk extends Item{ constructor(){ super('Vortex Disk', true); this.color='#64748b'; }
-  use(by){ const trap={x:by.x+by.w/2,y:by.y+by.h/2,w:12,h:12,t:4,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ const dx=trap.x-(tg.x+tg.w/2), dy=trap.y-(tg.y+tg.h/2); const d=Math.hypot(dx,dy); if(d<160){ tg.vx += (dx/d)*300*dt; tg.vy += (dy/d)*280*dt; }});},render:()=>{ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.arc(trap.x,trap.y,12,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
+  use(by){ const trap={x:by.x+by.w/2,y:by.y+by.h/2,w:12,h:12,t:4,owner:by,update:(dt)=>{trap.t-=dt; if(trap.t<=0) trap.dead=true; [p1,p2].forEach(tg=>{ if(!tg) return; if(tg===trap.owner) return; const dx=trap.x-(tg.x+tg.w/2), dy=trap.y-(tg.y+tg.h/2); const d=Math.hypot(dx,dy); if(d<160){ tg.vx += (dx/d)*300*dt; tg.vy += (dy/d)*280*dt; }});},render:()=>{ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.arc(trap.x,trap.y,12,0,Math.PI*2); ctx.stroke();} }; helpers.push(trap); }
 }
 class SolarCore extends Item{ constructor(){ super('Solar Core', true); this.color='#facc15'; }
   use(by){ by.buff.regen = Math.max(by.buff.regen||0, 12); }
