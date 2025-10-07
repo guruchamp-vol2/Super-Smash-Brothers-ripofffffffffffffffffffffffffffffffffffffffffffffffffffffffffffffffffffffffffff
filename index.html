@@ -285,15 +285,9 @@
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="game.js?v=6" defer></script>
-  <script src="game.js"></script>
-<script src="game_procedural_variants_addon.js"></script>
-  <!-- after your main game script -->
-<script src="smashlike-extended-moves.js"></script>
-<script src="game.js"></script>
-<script src="game_procedural_merge_append.js"></script>
-<script src="game.js"></script>
-<script src="proc_sprites_stronger_sonic_tails.js"></script>
+  <!-- Use CDN socket.io client to avoid server 404s when not available locally -->
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <!-- Main game runtime (single include). Keep deferred so DOM is ready. -->
+  <script src="game.js" defer></script>
 </body>
 </html>

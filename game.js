@@ -1,5 +1,10 @@
 // Smashlike — FS + extended animation rows (runtime sprites)
-const $=(q)=>document.querySelector(q); const $$=(q)=>[...document.querySelectorAll(q)];
+// Guard against multiple loads (dev console or duplicate script tags) which
+// would redeclare top-level lets/consts and throw SyntaxErrors in the page.
+if (window && window.__SMASHLIKE_LOADED){ console.warn('game.js already loaded — skipping second load'); }
+else {
+  window.__SMASHLIKE_LOADED = true;
+  const $=(q)=>document.querySelector(q); const $$=(q)=>[...document.querySelectorAll(q)];
 const Screens={ show(id){ const tgt = document.querySelector(id); if(!tgt){ console.warn('Screens.show target missing:', id); return; } document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); tgt.classList.remove('hidden'); }};
 
 // === ONLINE (client) ===
@@ -1713,6 +1718,8 @@ function cpuThink(bot, foe){
     }, alts:[{name:'Default', colors:{body:'#22c55e', outline:'#14532d', accent:'#86efac'}},{name:'Stone', colors:{body:'#94a3b8', outline:'#334155', accent:'#cbd5e1'}}]}
   );
 })();
+
+} // end load-guard else
 
 window.Smashlike = {
   addStage(stage){ STAGES.push(stage); },
