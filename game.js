@@ -2837,3 +2837,359 @@ window.Smashlike = {
   window.buildSpritesForSelection = buildSpritesForSelection_proc;
   console.log('[proc-variants] Loaded — procedural sprites & directional rows active.');
 })();
+/* proc_sprites_stronger_sonic_tails.js
+ * Drop-in after game.js to force procedural sprite sheets with better silhouettes
+ * for Sonic & Tails, and to add variant animation rows:
+ *   attack_{side,up,down,aerial} and special_{side,up,down,aerial}
+ * Also includes FS frames. No external images are used.
+ */
+(function(){
+  if (typeof window === 'undefined') return;
+  // --------- 0) Force procedural sheets (no portraits/external) ----------
+  try{
+    window.USE_PORTRAIT_FALLBACK = false;
+    window.FORCE_PROCEDURAL = true;
+  }catch{}
+
+  // --------- 1) Extend animation list with variants ----------
+  const BASE = (window.ANIMS && Array.isArray(window.ANIMS)) ? window.ANIMS : [
+    ['idle',16,12], ['walk',16,14], ['run',16,20],
+    ['jump',12,16], ['aerial',12,14],
+    ['attack',14,20], ['special',14,20],
+    ['hitstun',10,18], ['ko',12,14], ['fs',16,22]
+  ];
+  const BASE_NO_GENERIC = BASE.filter(([n])=> n!=='attack' && n!=='special');
+  const VARIANT_ROWS = [
+    ['attack_side',  14, 20],
+    ['attack_up',    14, 20],
+    ['attack_down',  14, 20],
+    ['attack_aerial',14, 20],
+    ['special_side', 14, 20],
+    ['special_up',   14, 20],
+    ['special_down', 14, 20],
+    ['special_aerial',14,20],
+  ];
+  const EXT_ANIMS = [...BASE_NO_GENERIC, ...VARIANT_ROWS];
+  window.ANIMS = EXT_ANIMS; // expose
+
+  // --------- 2) Add up/down flags to controls (wrap updateControls) ----------
+  const _origUpdateControls = window.updateControls;
+  window.updateControls = function(){
+    if (_origUpdateControls) _origUpdateControls();
+    const keys = window.keys || {};
+    const c1 = window.controlsP1, c2 = window.controlsP2;
+    if (c1){ c1.up = !!keys['w']; c1.down = !!keys['s']; }
+    if (c2){ c2.up = !!(keys['ArrowUp'] || keys['0']); c2.down = !!keys['ArrowDown']; }
+  };
+
+  // --------- 3) Variant dispatch in Fighter.update/attack/special ----------
+  const F = window.Fighter;
+  if (!F){ console.warn('[proc-stronger] Fighter missing; load AFTER game.js'); return; }
+
+  function variantFrom(self, controls){
+    if (!self.onGround) return 'aerial';
+    if (controls && controls.up)   return 'up';
+    if (controls && controls.down) return 'down';
+    return 'side';
+  }
+
+  // snapshot controls so attack/special know intent
+  const _origUpdate = F.prototype.update;
+  F.prototype.update = function(dt, controls){
+    this._controlsSnapshot = controls ? { ...controls } : {};
+    const ret = _origUpdate.apply(this, arguments); // lets base do physics, timers, default anim choice
+
+    // After base picks a generic anim, switch to the specific variant row if available
+    const mani = window.MANIFEST && window.MANIFEST[this.spriteKey];
+    const anims = mani && mani.anims;
+    if (!anims) return ret;
+
+    const v = variantFrom(this, this._controlsSnapshot);
+    if(this.tKO>0 && anims.ko){ this.anim='ko'; }
+    else if(this.fsActive && anims.fs){ this.anim='fs'; }
+    else if(this.tHitstun>0 && anims.hitstun){ this.anim='hitstun'; }
+    else if(this.tAttack>0){
+      const k='attack_'+(this._lastAtkVariant||v);
+      this.anim = anims[k] ? k : (anims.attack_side? 'attack_side' : this.anim);
+    } else if(this.tSpecial>0){
+      const k='special_'+(this._lastSpVariant||v);
+      this.anim = anims[k] ? k : (anims.special_side? 'special_side' : this.anim);
+    }
+    return ret;
+  };
+  const _origAttack = F.prototype.attack;
+  F.prototype.attack = function(op){
+    const c = this._controlsSnapshot || {};
+    this._lastAtkVariant = variantFrom(this,c);
+    return _origAttack.apply(this, arguments);
+  };
+  const _origSpecial = F.prototype.special;
+  F.prototype.special = function(op){
+    const c = this._controlsSnapshot || {};
+    this._lastSpVariant = variantFrom(this,c);
+    return _origSpecial.apply(this, arguments);
+  };
+
+  // --------- 4) Procedural sheet generator with character-specific accents ----------
+  const FW = window.FW || 16, FH = window.FH || 16;
+  const ANIMS = window.ANIMS;
+  // helpers
+  function pix(g,x,y,w,h,fill){ g.fillStyle=fill; g.fillRect(Math.round(x),Math.round(y),w,h); }
+  function seg(g, x1,y1,x2,y2,w,fill){
+    const dx=x2-x1, dy=y2-y1, len=Math.max(1,Math.hypot(dx,dy)), steps=Math.ceil(len/1.2);
+    g.fillStyle=fill;
+    for(let i=0;i<=steps;i++){ const t=i/steps, x=x1+dx*t, y=y1+dy*t; g.fillRect(Math.round(x-w/2),Math.round(y-w/2),w,w); }
+  }
+
+  // Base poses from the game if present
+  const POSES = window.POSES || {};
+  function basePose(name, t){
+    if (name==='idle'   && POSES.idle)   return POSES.idle(t);
+    if (name==='walk'   && POSES.walk)   return POSES.walk(t);
+    if (name==='run'    && POSES.run)    return POSES.run(t);
+    if (name==='jump'   && POSES.jump)   return POSES.jump(t);
+    if (name==='aerial' && POSES.aerial) return POSES.aerial(t);
+    if (name==='hitstun'&& POSES.hitstun)return POSES.hitstun(t);
+    if (name==='ko'     && POSES.ko)     return POSES.ko(t);
+    if (name==='fs'     && POSES.fs)     return POSES.fs(t);
+    // minimal fallback
+    return { torso:[8,10,8,14], head:[8,7], r_arm:[8,11,11,11], l_arm:[8,11,5,11], l_leg:[8,15,7,17], r_leg:[8,15,9,17] };
+  }
+
+  function poseVariant(kind, t, variantKey){
+    // start from attack/special if available, else aerial-ish
+    const p = (kind==='attack' && window.pose_attack) ? window.pose_attack(t) :
+              (kind==='special'&& window.pose_special)? window.pose_special(t) :
+              basePose('aerial', t);
+    const out = JSON.parse(JSON.stringify(p));
+    const swing = Math.sin(Math.min(1.0,t)*Math.PI);
+    function setArm(a, ang, len){
+      const by=(p.torso?p.torso[1]+1:10), cx=8;
+      const rx = cx + Math.cos(ang)*len;
+      const ry = by + Math.sin(ang)*len;
+      out[a] = [8, by, rx, ry];
+    }
+    if (variantKey==='side'){   setArm('r_arm', -0.9 + 2.4*swing, 3.6); setArm('l_arm', 0.4 - 0.5*swing, 2.7); }
+    if (variantKey==='up'){     setArm('r_arm', -1.6 + 2.0*swing, 4.0); setArm('l_arm',-0.8  + 0.8*swing, 2.6); out.head[1]-=1.0; }
+    if (variantKey==='down'){   setArm('r_arm',  1.7 - 1.8*swing, 4.0); setArm('l_arm', 2.2  - 0.9*swing, 2.8); out.torso[1]+=0.6; }
+    if (variantKey==='aerial'){ setArm('r_arm', -0.5 + 2.2*swing, 3.0); setArm('l_arm', 2.6  - 1.6*swing, 2.6); }
+    return out;
+  }
+
+  // slightly nicer 8-bit body
+  function drawBody(g, pal, pose){
+    const skin = '#f2c68d', hair='#2d231e';
+    const shirt = pal.body || '#7dd3fc', pants = pal.outline || '#0ea5e9', accent = pal.accent || '#ffffff';
+    const [tx1,ty1,tx2,ty2]=pose.torso; const cx=(tx1+tx2)/2;
+    const [hx,hy]=pose.head || [8,7];
+
+    // Hair + face base
+    pix(g,hx-3,hy-3,6,2,hair);
+    pix(g,hx-3,hy-1,6,4,skin);
+    // eyes
+    pix(g,hx-2,hy,1,1,'#000'); pix(g,hx+1,hy,1,1,'#000');
+
+    // torso
+    pix(g,cx-3,ty1+1,6,6,shirt);
+
+    // arms
+    const shoulderY = ty1+3, lShoulder=cx-3, rShoulder=cx+3;
+    const la=pose.l_arm, ra=pose.r_arm;
+    if(la) seg(g,lShoulder,shoulderY,la[2],la[3],2,skin);
+    if(ra) seg(g,rShoulder,shoulderY,ra[2],ra[3],2,skin);
+
+    // legs
+    const hipY=ty1+7, lHip=cx-2, rHip=cx+2;
+    const ll=pose.l_leg, rl=pose.r_leg;
+    if(ll) seg(g,lHip,hipY,ll[2],ll[3],2,pants);
+    if(rl) seg(g,rHip,hipY,rl[2],rl[3],2,pants);
+
+    // belt
+    pix(g,cx-1,ty1+5,2,1,accent);
+  }
+
+  // helpers for gloves/shoes
+  function glove(g,x,y){ pix(g,x-1,y-1,3,3,'#ffffff'); }
+  function shoe(g,x,y,color='#c51616'){ pix(g,x-2,y,5,2,color); pix(g,x-2,y-1,5,1,'#ffffff'); }
+
+  // === Character-specific accents (Sonic & Tails emphasized) ===
+  function drawSonic(g, pose, t, rowName){
+    const blue='#1fb6ff', muzzle='#f4caa6';
+    const [hx,hy]=pose.head || [8,7];
+    const [tx1,ty1,tx2,ty2]=pose.torso || [8,10,8,14];
+    const cx=(tx1+tx2)/2;
+    // Replace basic head with Sonic silhouette
+    // crown
+    pix(g,hx-4,hy-5,8,2,blue);
+    // quills back (3 layers)
+    pix(g,hx-7,hy-1,4,1,blue);
+    pix(g,hx-8,hy, 5,1,blue);
+    pix(g,hx-9,hy+1,6,1,blue);
+    // side spikes
+    pix(g,hx+2,hy-2,3,1,blue);
+    pix(g,hx+3,hy-1,3,1,blue);
+    // ear hints
+    pix(g,hx-5,hy-5,2,2,blue); pix(g,hx+3,hy-5,2,2,blue);
+    // face base (white band + muzzle)
+    pix(g,hx-3,hy-2,6,2,'#eaf2ff'); // eye band
+    pix(g,hx-1,hy-2,1,1,'#111');    // pupils
+    pix(g,hx+1,hy-2,1,1,'#111');
+    pix(g,hx-2,hy,4,2,muzzle);      // muzzle
+    pix(g,hx-2,hy+2,4,1,'#e0b88f'); // muzzle shade
+
+    // gloves
+    const la=pose.l_arm, ra=pose.r_arm;
+    if(la) glove(g, la[2], la[3]);
+    if(ra) glove(g, ra[2], ra[3]);
+    // shoes (red with white stripe)
+    const ll=pose.l_leg, rl=pose.r_leg;
+    if(ll) shoe(g, ll[2], ll[3]+1);
+    if(rl) shoe(g, rl[2], rl[3]+1);
+
+    // spin / boost aura for aerial attack/special
+    if (/special_aerial|attack_aerial|aerial/.test(rowName)){
+      const a = Math.max(0, 0.35 + 0.25*Math.sin(t*2*Math.PI));
+      g.globalAlpha = a;
+      pix(g, (cx-8), (hy-8), 16, 16, 'rgba(31,182,255,0.25)');
+      g.globalAlpha = 1;
+    }
+  }
+
+  function drawTails(g, pose, t, rowName){
+    const orange='#f59e0b', tailTip='#ffffff', muzzle='#ffe6c4';
+    const [hx,hy]=pose.head || [8,7];
+    const [tx1,ty1,tx2,ty2]=pose.torso || [8,10,8,14];
+    const cx=(tx1+tx2)/2;
+    // Hair tuft and ears
+    pix(g,hx-4,hy-5,8,2,orange);
+    pix(g,hx-5,hy-6,2,2,orange); pix(g,hx+3,hy-6,2,2,orange);
+    // White face + muzzle
+    pix(g,hx-3,hy-2,6,2,'#ffffff'); // face/cheeks
+    pix(g,hx-2,hy,4,2,muzzle);
+    pix(g,hx-1,hy-1,1,1,'#111'); pix(g,hx+1,hy-1,1,1,'#111'); // eyes
+
+    // Twin tails from hip
+    const hipY = ty1+7;
+    const sway = Math.sin(t*2*Math.PI);
+    function tail(off, phase){
+      const bx = cx-2+off, by = hipY-1;
+      // fan segments (approx wedge)
+      pix(g,bx-1,by, 4,1,orange);
+      pix(g,bx-2,by+1,5,1,orange);
+      pix(g,bx-3,by+2,6,1,orange);
+      // tip
+      pix(g,bx+1,by+3,3,1,tailTip);
+    }
+    // angle/direction suggestion via offset during aerial/up variants
+    if (/aerial|up/.test(rowName)){
+      tail(-2 + sway, 0);
+      tail( 2 - sway, 0.5);
+    } else {
+      tail(-2,0); tail(2,0.5);
+    }
+
+    // gloves
+    const la=pose.l_arm, ra=pose.r_arm;
+    if(la) glove(g, la[2], la[3]);
+    if(ra) glove(g, ra[2], ra[3]);
+    // shoes
+    const ll=pose.l_leg, rl=pose.r_leg;
+    if(ll) shoe(g, ll[2], ll[3]+1, '#c51616');
+    if(rl) shoe(g, rl[2], rl[3]+1, '#c51616');
+  }
+
+  // Minimal identifiers for a few others (will keep originals readable but not as detailed as Sonic/Tails)
+  function drawBasicBadge(g, id, pose){
+    const [hx,hy] = pose.head || [8,7];
+    const map = {
+      knuckles: '#ef4444',
+      amy:      '#f472b6',
+      shadow:   '#111827',
+      frisk:    '#7c3aed',
+      ralsei:   '#22c55e',
+      undyne:   '#60a5fa',
+      sans:     '#e5e7eb'
+    };
+    const c = map[id];
+    if (!c) return;
+    pix(g, hx-1, hy-4, 2, 1, c);
+  }
+
+  function drawAccents(g, id, pal, pose, rowName, t){
+    if (id==='sonic')  return drawSonic(g, pose, t, rowName);
+    if (id==='tails')  return drawTails(g, pose, t, rowName);
+    // other light identifiers
+    drawBasicBadge(g, id, pose);
+  }
+
+  function buildProcSheet(char, altIndex){
+    const rows = ANIMS;
+    const cols = Math.max(...rows.map(a=>a[1]||16));
+    const sheet = document.createElement('canvas');
+    sheet.width = cols*FW; sheet.height = rows.length*FH;
+    const g = sheet.getContext('2d'); g.imageSmoothingEnabled=false;
+
+    // palette: keep alt colors for outfit while Sonic/Tails heads use fixed brand colors above
+    const alt = (char.alts && char.alts[Math.max(0, Math.min((char.alts.length-1)||0, altIndex||0))]) ||
+                { colors:{body:'#7dd3fc', outline:'#0ea5e9', accent:'#e5fbff'} };
+    const pal = alt.colors || {body:'#7dd3fc', outline:'#0ea5e9', accent:'#e5fbff'};
+
+    const meta={ frameSize:[FW,FH], anims:{} };
+
+    rows.forEach(([name,frames,fps],r)=>{
+      meta.anims[name]={row:r,frames,fps};
+      for(let i=0;i<frames;i++){
+        const t=i/frames;
+        let pose;
+        if (name.startsWith('attack_')){
+          const vk = name.split('_')[1];
+          pose = poseVariant('attack', t, vk);
+        } else if (name.startsWith('special_')){
+          const vk = name.split('_')[1];
+          pose = poseVariant('special', t, vk);
+        } else {
+          pose = basePose(name, t);
+        }
+        g.save();
+        g.translate(i*FW, r*FH);
+        drawBody(g, pal, pose);
+        drawAccents(g, (char.id || char.name || 'unknown'), pal, pose, name, t);
+
+        // Flavor trail on big moves
+        if (/attack_|special_|fs/.test(name)){
+          g.globalAlpha = Math.max(0, 0.30 - i/frames*0.30);
+          pix(g, 12, 7, 3, 2, pal.accent || '#ffffff');
+        }
+        g.restore();
+      }
+    });
+    return {sheet, meta};
+  }
+
+  // --------- 5) Override builder ---------
+  const SPRITES = window.SPRITES || (window.SPRITES = {});
+  const MANIFEST = window.MANIFEST || (window.MANIFEST = {});
+
+  async function buildSpritesForSelection_proc(){
+    const CH = window.CHARACTERS || [];
+    const p1Char = (window.App && window.App.p1 && window.App.p1.char) || CH[0];
+    const p2Char = (window.App && window.App.p2 && window.App.p2.char) || CH[1] || CH[0];
+    const p1Alt  = (window.App && window.App.p1 && window.App.p1.alt) || 0;
+    const p2Alt  = (window.App && window.App.p2 && window.App.p2.alt) || 0;
+
+    function buildOne(char, side, altIndex){
+      const id = char.id + '_' + side;
+      const built = buildProcSheet(char, altIndex);
+      SPRITES[id] = built.sheet;
+      MANIFEST[id] = { frameSize: built.meta.frameSize, anims: built.meta.anims };
+      return id;
+    }
+
+    const p1Id = buildOne(p1Char, 'p1', p1Alt);
+    const p2Id = buildOne(p2Char, 'p2', p2Alt);
+    return {p1Id, p2Id};
+  }
+
+  window.buildSpritesForSelection = buildSpritesForSelection_proc;
+  console.log('[proc-stronger] Loaded: procedural sprites forced; Sonic & Tails improved; variants enabled.');
+})();
